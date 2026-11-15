@@ -1,5 +1,5 @@
 ---
-name: "Orchestrator"
+name: "Maestro"
 description: "Dispatcher for scoped specialist routing and sequencing; one tool-free advisor for ambiguous selection. No nested delegation."
 model: ["GPT-6 Luna", "Claude Haiku 5.5"]
 user-invocable: true

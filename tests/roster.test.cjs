@@ -35,6 +35,14 @@ test("roster role counts match the source catalog", () => {
   assert.equal(agents.filter((agent) => agent.role === "Specialist").length, 41);
 });
 
+test("Maestro is the display name for the Orchestrator role", () => {
+  const [agent] = summarizeAgentPaths(["./agents/Orchestrator.agent.md"]);
+  assert.deepEqual(agent, { id: "Orchestrator", name: "Maestro", role: "Coordinator" });
+
+  const content = fs.readFileSync(path.join(root, "agents", "Orchestrator.agent.md"), "utf8");
+  assert.match(content, /^name:\s*"Maestro"\s*$/m);
+});
+
 test("the council webview is local and renders no inferred activity", () => {
   const html = renderCouncilHtml(
     [{ id: "Example", name: "Example", role: "Specialist" }],

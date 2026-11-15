@@ -4,7 +4,7 @@ An extension that contributes the Utopik agent roster to VS Code Copilot Chat an
 
 ## Use
 
-Install the extension in VS Code 1.146 or later, open Copilot Chat, and select **Orchestrator** from the agent picker. The other 48 agents are hidden from the picker and remain available for delegation. The **Agent Council** panel lists all 49 contributed definitions.
+Install the extension in VS Code 1.146 or later, open Copilot Chat, and select **Maestro** (the Orchestrator role) from the agent picker. The other 48 agents are hidden from the picker and remain available for delegation. The **Agent Council** panel lists all 49 contributed definitions.
 
 For local development, run `npm install`, `npm test`, then press F5 to launch an Extension Development Host. Run `npm run package` to create a local VSIX; this repository does not publish it.
 

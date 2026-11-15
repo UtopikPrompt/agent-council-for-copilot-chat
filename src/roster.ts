@@ -15,7 +15,8 @@ export function summarizeAgentPaths(paths: readonly string[]): AgentSummary[] {
       throw new Error(`Not an agent definition path: ${path}`);
     }
 
-    return { id: name, name, role: getAgentRole(name) };
+    const displayName = name === "Orchestrator" ? "Maestro" : name;
+    return { id: name, name: displayName, role: getAgentRole(name) };
   });
 
   return agents.sort((left, right) => {

@@ -20,13 +20,14 @@ All 49 source `.agent.md` files are included. Their Markdown instruction bodies 
 
 | Source field | Adaptation | Effect |
 |---|---|---|
+| `name` | The Orchestrator definition is displayed as `Maestro`; its filename, embedded role, and routing references remain `Orchestrator`. | Gives the user-invocable dispatcher a product-facing name without changing worker identifiers. |
 | `argument-hint` | Removed from all files. | The field is not supported by the Copilot custom-agent schema. |
 | `agents` | Removed from all files. The Orchestrator's embedded routing index and worker allowlist remain in its body. | Copilot uses its native `task` delegation tool; the Local `agents` allowlist is not a Copilot enforcement boundary. The embedded allowlist is model guidance, not a hard runtime restriction. |
 | `model` | Preserved for the seven source agents that declare it. | The Copilot model catalog lists GPT-6 Luna and Claude Haiku 5.5 for VS Code. These are preferences, not guarantees: plan entitlements and organization policy may affect availability, and users can select another model. |
 
 Qualified tool references such as `github/*`, `io.github.ihor-sokoliuk/mcp-searxng/*`, `vscode/askQuestions`, and `read/readFile` are retained. They work only when the corresponding tools are provided by the user's Copilot session. This extension does not install or configure those tools. Missing tools can limit an agent's behavior; prompt text cannot create a tool or enforce permissions.
 
-Only Orchestrator is user-invocable in this extension. The source definitions also set GovGitWorkflowAgent and GovWebResearchAgent to `user-invocable: true`; those two flags are adapted to `false` here to keep them available for delegation without exposing them as direct picker entries. Their tool constraints and instruction bodies are unchanged.
+Only Maestro, the Orchestrator role, is user-invocable in this extension. The source definitions also set GovGitWorkflowAgent and GovWebResearchAgent to `user-invocable: true`; those two flags are adapted to `false` here to keep them available for delegation without exposing them as direct picker entries. Their tool constraints and instruction bodies are unchanged.
 
 ## Privacy
 
