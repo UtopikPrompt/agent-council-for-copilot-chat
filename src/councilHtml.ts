@@ -61,24 +61,40 @@ export function renderCouncilHtml(
     .section-heading { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin: 18px 0 7px; }
     h2 { margin: 0; font-size: 12px; font-weight: 650; }
     #result-count { color: var(--muted); font-size: 11px; }
-    .roster { margin: 0; padding: 0; list-style: none; }
-    .agent { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; min-height: 38px; border-top: 1px solid var(--line); }
-    .agent-index { color: var(--muted); font-variant-numeric: tabular-nums; }
-    .agent-name { overflow-wrap: anywhere; font-weight: 550; }
-    .agent-role { padding: 2px 6px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 10px; white-space: nowrap; }
-    .agent-status { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); font-size: 10px; white-space: nowrap; }
-    .agent-status__indicator { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+    .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); margin: 0; padding: 8px; list-style: none; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background-color: color-mix(in srgb, var(--vscode-editor-background) 86%, var(--teal)); background-image: linear-gradient(45deg, color-mix(in srgb, var(--ink) 4%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--ink) 4%, transparent) 75%); background-size: 24px 24px; }
+    .agent { position: relative; display: grid; grid-template-rows: 64px auto auto; gap: 4px; min-width: 0; min-height: 112px; padding: 8px 6px; border-right: 1px solid color-mix(in srgb, var(--line) 55%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+    .agent-scene { position: relative; display: grid; place-items: center; }
+    .agent-scene::before { position: absolute; bottom: 5px; width: 58px; height: 4px; background: var(--desk-top, #8b6951); box-shadow: 0 4px 0 var(--desk-front, #59453a), -8px 8px 0 -1px var(--desk-front, #59453a), 8px 8px 0 -1px var(--desk-front, #59453a); content: ""; }
+    .agent-screen { position: absolute; bottom: 15px; width: 20px; height: 13px; border: 2px solid #29363e; background: #8db4a1; box-shadow: inset 0 0 0 2px #516e65; }
+    .agent-screen::after { position: absolute; top: 4px; left: 4px; width: 8px; height: 2px; background: #d3e6ba; content: ""; }
+    .pixel-sprite { position: absolute; top: 2px; width: 32px; height: 36px; overflow: visible; shape-rendering: crispEdges; }
+    .pixel-sprite--coordinator { --sprite-hair: #363342; --sprite-shirt: #c9e36b; }
+    .pixel-sprite--advisor { --sprite-hair: #714d45; --sprite-shirt: #59c7b5; }
+    .pixel-sprite--specialist { --sprite-hair: #34495c; --sprite-shirt: #ff9770; }
+    .pixel-skin { fill: #f0c99b; }
+    .pixel-hair { fill: var(--sprite-hair); }
+    .pixel-shirt { fill: var(--sprite-shirt); }
+    .pixel-pants { fill: #40505a; }
+    .pixel-detail { fill: #28343b; }
+    .agent-index { position: absolute; top: 3px; right: 4px; color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+    .agent-name { overflow: hidden; color: var(--ink); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .agent-meta { display: flex; justify-content: space-between; gap: 4px; align-items: center; min-width: 0; }
+    .agent-role { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .agent-status { display: inline-flex; flex: 0 0 auto; gap: 4px; align-items: center; color: var(--muted); font-size: 9px; white-space: nowrap; }
+    .agent-status__indicator { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
     .agent[data-status="dispatching"] .agent-status { color: var(--lime); }
     .agent[data-status="dispatching"] .agent-status__indicator { background: var(--lime); animation: signal 1.1s ease-in-out infinite; }
+    .agent[data-status="dispatching"] .pixel-sprite { animation: typing .42s steps(2, end) infinite; }
     .agent[data-status="returned"] .agent-status__indicator { background: var(--teal); }
     .agent[data-status="failed"] .agent-status { color: var(--coral); }
     .agent[data-status="failed"] .agent-status__indicator { background: var(--coral); }
-    .agent[data-role="Coordinator"] .agent-role { border-color: color-mix(in srgb, var(--lime) 55%, var(--line)); color: var(--ink); }
-    .agent[data-role="Advisor"] .agent-role { border-color: color-mix(in srgb, var(--teal) 55%, var(--line)); }
+    .agent[data-role="Coordinator"] .agent-role { color: var(--lime); }
+    .agent[data-role="Advisor"] .agent-role { color: var(--teal); }
+    @keyframes typing { 50% { transform: translateY(-2px); } }
     .empty { padding: 20px 4px; color: var(--muted); text-align: center; }
     .footnote { margin: 18px 0 0; color: var(--muted); font-size: 11px; }
     @keyframes signal { 50% { opacity: .35; transform: scale(.75); } }
-    @media (prefers-reduced-motion: reduce) { .seal__orbit, .agent-status__indicator { animation: none; } }
+    @media (prefers-reduced-motion: reduce) { .seal__orbit, .agent-status__indicator, .pixel-sprite { animation: none !important; } }
   </style>
 </head>
 <body>
@@ -87,7 +103,7 @@ export function renderCouncilHtml(
       <div>
         <p class="eyebrow">Utopik / Copilot Chat</p>
         <h1>Agent Council</h1>
-        <p class="subhead">A roster of ${agents.length} contributed definitions</p>
+        <p class="subhead">A pixel office for ${agents.length} contributed agents</p>
       </div>
       <div class="seal" aria-hidden="true">
         <span class="seal__ring"></span>
@@ -97,7 +113,7 @@ export function renderCouncilHtml(
     </header>
     <section class="notice" aria-live="polite">
       <strong>Orchestrator-reported activity</strong>
-      <p>Statuses appear only when Orchestrator reports a dispatch and its return. They are not independently verified by Copilot.</p>
+      <p>Characters move only on reported dispatch events. This board does not observe Copilot tool or file activity.</p>
     </section>
     <section class="controls" aria-label="Roster filters">
       <input id="search" class="search" type="search" placeholder="Find an agent" aria-label="Find an agent">
@@ -108,10 +124,10 @@ export function renderCouncilHtml(
         <h2 id="roster-title">Roster</h2>
         <span id="result-count" aria-live="polite"></span>
       </div>
-      <ul id="roster" class="roster"></ul>
+      <ul id="roster" class="roster" aria-label="Agent office"></ul>
       <p id="empty" class="empty" hidden>No matching agents.</p>
     </section>
-    <p class="footnote">Lifecycle reports stay in memory for this extension host. Prompts, results, and source files are not recorded.</p>
+    <p class="footnote">Reports stay in memory for this extension host. Prompts, results, and source files are not recorded.</p>
   </main>
   <script nonce="${nonce}">
     const agents = ${serializedAgents};
@@ -137,16 +153,43 @@ export function renderCouncilHtml(
         const row = document.createElement("li");
         row.className = "agent";
         row.dataset.role = agent.role;
+        const activity = activityFor(agent);
+        row.dataset.status = activity?.status ?? "idle";
+        const scene = document.createElement("div");
+        scene.className = "agent-scene";
+        scene.setAttribute("aria-hidden", "true");
+        const screen = document.createElement("span");
+        screen.className = "agent-screen";
+        const sprite = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        sprite.setAttribute("viewBox", "0 0 7 8");
+        sprite.setAttribute("class", "pixel-sprite pixel-sprite--" + agent.role.toLowerCase());
+        sprite.setAttribute("aria-hidden", "true");
+        const pixels = ["..111..", ".12221.", ".12221.", "..555..", ".33333.", ".3.3.3.", ".4...4.", ".4...4."];
+        const palette = { "1": "pixel-hair", "2": "pixel-skin", "3": "pixel-shirt", "4": "pixel-pants", "5": "pixel-detail" };
+        for (const [y, line] of pixels.entries()) {
+          for (const [x, color] of Array.from(line).entries()) {
+            if (color === ".") continue;
+            const pixel = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            pixel.setAttribute("x", String(x));
+            pixel.setAttribute("y", String(y));
+            pixel.setAttribute("width", "1");
+            pixel.setAttribute("height", "1");
+            pixel.setAttribute("class", palette[color]);
+            sprite.append(pixel);
+          }
+        }
+        scene.append(screen, sprite);
         const index = document.createElement("span");
         index.className = "agent-index";
         index.textContent = String(agents.indexOf(agent) + 1).padStart(2, "0");
         const name = document.createElement("span");
         name.className = "agent-name";
         name.textContent = agent.name;
+        const meta = document.createElement("div");
+        meta.className = "agent-meta";
         const role = document.createElement("span");
         role.className = "agent-role";
         role.textContent = agent.role;
-        const activity = activityFor(agent);
         const status = document.createElement("span");
         status.className = "agent-status";
         row.dataset.status = activity?.status ?? "idle";
@@ -161,7 +204,8 @@ export function renderCouncilHtml(
               ? "Failed"
               : "Available";
         status.append(indicator, document.createTextNode(statusText));
-        row.append(index, name, role, status);
+        meta.append(role, status);
+        row.append(scene, index, name, meta);
         return row;
       }));
       resultCount.textContent = String(visible.length) + " / " + agents.length;

@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 const { summarizeAgentPaths } = require("../dist/src/roster.js");
 const { CouncilActivityStore } = require("../dist/src/activityStore.js");
 const { renderCouncilHtml } = require("../dist/src/councilHtml.js");
@@ -50,8 +51,12 @@ test("the council webview is local and renders no inferred activity", () => {
     "test-nonce",
   );
   assert.match(html, /Orchestrator-reported activity/);
-  assert.match(html, /not independently verified by Copilot/);
-  assert.doesNotMatch(html, /fetch\(|XMLHttpRequest|WebSocket|https?:\/\//);
+  assert.match(html, /does not observe Copilot tool or file activity/);
+  assert.doesNotMatch(html, /fetch\(|XMLHttpRequest|WebSocket|sendBeacon/);
+  assert.doesNotMatch(html, /(?:src|href)\s*=\s*["']https?:\/\//i);
+  const script = html.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i);
+  assert.ok(script, "Webview script is missing");
+  assert.doesNotThrow(() => new vm.Script(script[1]));
 });
 
 test("Orchestrator activity reports enforce lifecycle and agent scope", () => {

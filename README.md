@@ -10,7 +10,7 @@ For local development, run `npm install`, `npm test`, then press F5 to launch an
 
 ## What the council view shows
 
-The view is a searchable catalog of the coordinator, seven advisors, and 41 specialist agents. It animates dispatch and return states explicitly reported by Orchestrator through a local extension tool. These reports are not independent observation of Copilot runtime activity. See [API capabilities and agent adaptations](docs/compatibility.md).
+The view is a searchable pixel-office board with an original character and workstation for each of the 49 contributed agents. Characters animate on dispatch states explicitly reported by Maestro through a local extension tool. These reports are not independent observation of Copilot runtime activity. See [API capabilities and agent adaptations](docs/compatibility.md).
 
 ## Privacy
 

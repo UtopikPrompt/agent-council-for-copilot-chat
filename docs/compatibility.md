@@ -10,6 +10,8 @@ The VS Code extension API does not expose lifecycle events for native Copilot ch
 
 This extension contributes a stable language-model tool that Orchestrator may call before and after its own agent-tool invocations. The council view displays only those explicit reports as `Dispatching`, `Returned`, or `Failed`; it does not infer a live Copilot state. Reports contain only a canonical agent name, a lifecycle status, and an extension-generated run ID. They are held in memory for the extension host lifetime and are not independently verified. If Orchestrator omits or fails to send a report, the view can be incomplete.
 
+The council presents contributed definitions as a pixel-office board with original inline pixel sprites. A sprite animates only while the board holds an Orchestrator-reported `dispatching` state; it does not infer file reads, edits, commands, or native Copilot child-chat progress.
+
 VS Code's proposed `chatParticipantAdditions` API includes `ChatSubagentToolInvocationData`, which can render subagent-style progress inside a chat participant's own response. It is not a subscription to native Copilot subagent events, is not a stable API for Marketplace extensions, and the Chat Participant API is deprecated and unsupported in the Copilot harness. This extension does not depend on it.
 
 The older `vscode.chat.createChatParticipant` API handles requests sent to that participant only. It is deprecated and is not supported in the Copilot harness, so it is not used as a monitor or as a substitute chat entry point here. The Orchestrator definition itself is contributed through `chatAgents`.
