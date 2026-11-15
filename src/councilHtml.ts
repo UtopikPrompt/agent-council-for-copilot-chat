@@ -62,15 +62,23 @@ export function renderCouncilHtml(
     h2 { margin: 0; font-size: 12px; font-weight: 650; }
     #result-count { color: var(--muted); font-size: 11px; }
     .roster { margin: 0; padding: 0; list-style: none; }
-    .agent { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 38px; border-top: 1px solid var(--line); }
+    .agent { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; min-height: 38px; border-top: 1px solid var(--line); }
     .agent-index { color: var(--muted); font-variant-numeric: tabular-nums; }
     .agent-name { overflow-wrap: anywhere; font-weight: 550; }
     .agent-role { padding: 2px 6px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .agent-status { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .agent-status__indicator { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+    .agent[data-status="dispatching"] .agent-status { color: var(--lime); }
+    .agent[data-status="dispatching"] .agent-status__indicator { background: var(--lime); animation: signal 1.1s ease-in-out infinite; }
+    .agent[data-status="returned"] .agent-status__indicator { background: var(--teal); }
+    .agent[data-status="failed"] .agent-status { color: var(--coral); }
+    .agent[data-status="failed"] .agent-status__indicator { background: var(--coral); }
     .agent[data-role="Coordinator"] .agent-role { border-color: color-mix(in srgb, var(--lime) 55%, var(--line)); color: var(--ink); }
     .agent[data-role="Advisor"] .agent-role { border-color: color-mix(in srgb, var(--teal) 55%, var(--line)); }
     .empty { padding: 20px 4px; color: var(--muted); text-align: center; }
     .footnote { margin: 18px 0 0; color: var(--muted); font-size: 11px; }
-    @media (prefers-reduced-motion: reduce) { .seal__orbit { animation: none; } }
+    @keyframes signal { 50% { opacity: .35; transform: scale(.75); } }
+    @media (prefers-reduced-motion: reduce) { .seal__orbit, .agent-status__indicator { animation: none; } }
   </style>
 </head>
 <body>
@@ -88,8 +96,8 @@ export function renderCouncilHtml(
       </div>
     </header>
     <section class="notice" aria-live="polite">
-      <strong>Live activity is not available</strong>
-      <p>VS Code does not expose Copilot session or subagent activity events to extensions. This catalog shows definitions only.</p>
+      <strong>Orchestrator-reported activity</strong>
+      <p>Statuses appear only when Orchestrator reports a dispatch and its return. They are not independently verified by Copilot.</p>
     </section>
     <section class="controls" aria-label="Roster filters">
       <input id="search" class="search" type="search" placeholder="Find an agent" aria-label="Find an agent">
@@ -103,7 +111,7 @@ export function renderCouncilHtml(
       <ul id="roster" class="roster"></ul>
       <p id="empty" class="empty" hidden>No matching agents.</p>
     </section>
-    <p class="footnote">Decorative motion only. No chat history, prompts, source files, or activity are read or stored.</p>
+    <p class="footnote">Lifecycle reports stay in memory for this extension host. Prompts, results, and source files are not recorded.</p>
   </main>
   <script nonce="${nonce}">
     const agents = ${serializedAgents};
@@ -115,6 +123,12 @@ export function renderCouncilHtml(
     const resultCount = document.getElementById("result-count");
     const empty = document.getElementById("empty");
     let activeRole = "All";
+    let activities = [];
+
+    function activityFor(agent) {
+      const matching = activities.filter((activity) => activity.agent === agent.id);
+      return matching.find((activity) => activity.status === "dispatching") || matching[0];
+    }
 
     function render() {
       const query = search.value.trim().toLowerCase();
@@ -132,7 +146,22 @@ export function renderCouncilHtml(
         const role = document.createElement("span");
         role.className = "agent-role";
         role.textContent = agent.role;
-        row.append(index, name, role);
+        const activity = activityFor(agent);
+        const status = document.createElement("span");
+        status.className = "agent-status";
+        row.dataset.status = activity?.status ?? "idle";
+        const indicator = document.createElement("span");
+        indicator.className = "agent-status__indicator";
+        indicator.setAttribute("aria-hidden", "true");
+        const statusText = activity?.status === "dispatching"
+          ? "Dispatching"
+          : activity?.status === "returned"
+            ? "Returned"
+            : activity?.status === "failed"
+              ? "Failed"
+              : "Available";
+        status.append(indicator, document.createTextNode(statusText));
+        row.append(index, name, role, status);
         return row;
       }));
       resultCount.textContent = String(visible.length) + " / " + agents.length;
@@ -158,8 +187,16 @@ export function renderCouncilHtml(
       filters.append(button);
     }
 
+    const vscode = acquireVsCodeApi();
+    window.addEventListener("message", (event) => {
+      if (event.data?.type === "council-activity-snapshot" && Array.isArray(event.data.activities)) {
+        activities = event.data.activities;
+        render();
+      }
+    });
     search.addEventListener("input", render);
     render();
+    vscode.postMessage({ type: "council-ready" });
   </script>
 </body>
 </html>`;

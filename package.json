@@ -87,6 +87,36 @@
       { "path": "./agents/Orchestrator.agent.md" },
       { "path": "./agents/UtilityAdvisor.agent.md" }
     ],
+    "languageModelTools": [
+      {
+        "name": "utopikAgentCouncil_reportActivity",
+        "displayName": "Report Council Activity",
+        "userDescription": "Report Orchestrator's agent dispatch status to the local council view.",
+        "modelDescription": "Record an Orchestrator-reported lifecycle event for a contributed agent. Call with action dispatching immediately before invoking an agent; save the returned runId. After the invocation returns, report returned or failed using the same agent and runId. Only send the canonical agent name, action, and runId. Never include task prompts, results, file paths, source content, or secrets. These reports are not independent verification of Copilot runtime activity.",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "reportCouncilActivity",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["dispatching", "returned", "failed"],
+              "description": "Use dispatching before delegation, then returned or failed after the agent tool responds."
+            },
+            "agent": {
+              "type": "string",
+              "description": "Exact canonical name of a contributed agent other than Orchestrator."
+            },
+            "runId": {
+              "type": "string",
+              "description": "Omit for dispatching; reuse the runId returned by that call for returned or failed."
+            }
+          },
+          "required": ["action", "agent"],
+          "additionalProperties": false
+        }
+      }
+    ],
     "viewsContainers": {
       "panel": [
         {

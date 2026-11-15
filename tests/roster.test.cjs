@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const { summarizeAgentPaths } = require("../dist/src/roster.js");
+const { CouncilActivityStore } = require("../dist/src/activityStore.js");
 const { renderCouncilHtml } = require("../dist/src/councilHtml.js");
 
 const root = path.resolve(__dirname, "..");
@@ -40,9 +41,41 @@ test("the council webview is local and renders no inferred activity", () => {
     "vscode-webview://test",
     "test-nonce",
   );
-  assert.match(html, /Live activity is not available/);
-  assert.match(html, /Decorative motion only/);
+  assert.match(html, /Orchestrator-reported activity/);
+  assert.match(html, /not independently verified by Copilot/);
   assert.doesNotMatch(html, /fetch\(|XMLHttpRequest|WebSocket|https?:\/\//);
+});
+
+test("Orchestrator activity reports enforce lifecycle and agent scope", () => {
+  const store = new CouncilActivityStore(["Orchestrator", "CodeGeneralist"]);
+  const updates = [];
+  const unsubscribe = store.subscribe((snapshot) => updates.push(snapshot));
+
+  const dispatch = store.report({ action: "dispatching", agent: "CodeGeneralist" });
+  assert.equal(dispatch.status, "dispatching");
+  assert.ok(dispatch.runId);
+  assert.deepEqual(Object.keys(dispatch).sort(), ["agent", "runId", "startedAt", "status", "updatedAt"]);
+
+  const returned = store.report({ action: "returned", agent: "CodeGeneralist", runId: dispatch.runId });
+  assert.equal(returned.status, "returned");
+  assert.equal(updates.length, 2);
+  assert.throws(() => store.report({ action: "failed", agent: "CodeGeneralist", runId: dispatch.runId }));
+  assert.throws(() => store.report({ action: "dispatching", agent: "UnknownAgent" }));
+  assert.throws(() => store.report({ action: "dispatching", agent: "Orchestrator" }));
+
+  unsubscribe();
+  store.dispose();
+});
+
+test("manifest exposes a report tool and only Orchestrator references it", () => {
+  const toolName = "utopikAgentCouncil_reportActivity";
+  const toolReference = "utopikprompt.utopik-agent-council-for-copilot-chat/" + toolName;
+  assert.equal(manifest.contributes.languageModelTools.length, 1);
+  assert.equal(manifest.contributes.languageModelTools[0].name, toolName);
+
+  const orchestrator = fs.readFileSync(path.join(root, "agents", "Orchestrator.agent.md"), "utf8");
+  assert.ok(orchestrator.includes(toolReference));
+  assert.ok(orchestrator.includes("Orchestrator-reported events"));
 });
 
 test("the manifest preserves source picker visibility flags", () => {

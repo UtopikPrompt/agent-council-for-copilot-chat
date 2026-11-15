@@ -10,8 +10,8 @@ For local development, run `npm install`, `npm test`, then press F5 to launch an
 
 ## What the council view shows
 
-The view is a searchable, animated catalog of the coordinator, seven advisors, and 41 specialist agents. Its motion is decorative. Stable VS Code extension APIs do not expose Copilot session or subagent lifecycle events to third-party extensions, so the view does not show active/idle state, execution progress, or observed parent-child relationships. See [API capabilities and agent adaptations](docs/compatibility.md).
+The view is a searchable catalog of the coordinator, seven advisors, and 41 specialist agents. It animates dispatch and return states explicitly reported by Orchestrator through a local extension tool. These reports are not independent observation of Copilot runtime activity. See [API capabilities and agent adaptations](docs/compatibility.md).
 
 ## Privacy
 
-The extension sends no prompts, source code, telemetry, or activity records to any service. It does not read chat history. Copilot and any tools configured in the user's environment remain subject to their own service, account, and privacy settings.
+The extension makes no network requests and sends no telemetry. The activity tool records only agent names, lifecycle states, and generated run IDs in extension-host memory; it never records prompts, results, file paths, or source code. Copilot and any tools configured in the user's environment remain subject to their own service, account, and privacy settings.

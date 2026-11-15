@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
+import { COUNCIL_ACTIVITY_TOOL_NAME } from "../src/councilActivityTool";
 
 export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension(
@@ -11,6 +12,30 @@ export async function run(): Promise<void> {
   assert.equal(extension.isActive, true);
   assert.equal(extension.packageJSON.displayName, "Utopik Agent Council for Copilot Chat");
   assert.equal(extension.packageJSON.contributes.chatAgents.length, 49);
+  assert.equal(extension.packageJSON.contributes.languageModelTools[0].name, COUNCIL_ACTIVITY_TOOL_NAME);
+  assert.ok(vscode.lm.tools.some((tool) => tool.name === COUNCIL_ACTIVITY_TOOL_NAME));
   assert.ok(extension.packageJSON.contributes.views.utopikAgentCouncil);
   await vscode.commands.executeCommand("workbench.view.extension.utopikAgentCouncil");
+
+  const dispatchResult = await vscode.lm.invokeTool(COUNCIL_ACTIVITY_TOOL_NAME, {
+    input: { action: "dispatching", agent: "CodeGeneralist" },
+    toolInvocationToken: undefined,
+  });
+  const dispatchText = dispatchResult.content.find(
+    (part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart,
+  );
+  assert.ok(dispatchText, "Dispatch report did not return a result");
+  const dispatch = JSON.parse(dispatchText.value) as { runId: string; status: string };
+  assert.equal(dispatch.status, "dispatching");
+  assert.ok(dispatch.runId);
+
+  const returnResult = await vscode.lm.invokeTool(COUNCIL_ACTIVITY_TOOL_NAME, {
+    input: { action: "returned", agent: "CodeGeneralist", runId: dispatch.runId },
+    toolInvocationToken: undefined,
+  });
+  const returnText = returnResult.content.find(
+    (part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart,
+  );
+  assert.ok(returnText, "Return report did not return a result");
+  assert.equal((JSON.parse(returnText.value) as { status: string }).status, "returned");
 }

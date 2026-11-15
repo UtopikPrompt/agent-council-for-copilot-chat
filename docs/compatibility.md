@@ -6,7 +6,11 @@ Verified against the official VS Code documentation on 2026-11-14. The latest st
 
 VS Code supports the stable `contributes.chatAgents` extension contribution. Each entry points to a `.agent.md` file inside the extension. These definitions appear in Copilot Chat's custom-agent discovery and can be selected as chat agents. The extension also contributes a normal webview view through the stable `views` and `WebviewViewProvider` APIs.
 
-The VS Code extension API does not expose lifecycle events for native Copilot chat sessions or contributed/custom-agent executions. In particular, an extension cannot observe a user's selected agent, prompt/response, agent progress, tool calls, subagent start/end events, or runtime parent-child identifiers. The subagent documentation describes activity in VS Code's own chat UI; it does not define a public extension event API for that activity. This extension therefore displays no active/idle states, progress, event timeline, or inferred subagent links. Its animated motif is decorative, and its roster comes only from the extension's own contribution manifest.
+The VS Code extension API does not expose lifecycle events for native Copilot chat sessions or contributed/custom-agent executions. In particular, an extension cannot independently observe a user's selected agent, agent progress, tool calls, subagent start/end events, or runtime parent-child identifiers. The subagent documentation describes activity in VS Code's own chat UI; it does not define a public extension event API for that activity.
+
+This extension contributes a stable language-model tool that Orchestrator may call before and after its own agent-tool invocations. The council view displays only those explicit reports as `Dispatching`, `Returned`, or `Failed`; it does not infer a live Copilot state. Reports contain only a canonical agent name, a lifecycle status, and an extension-generated run ID. They are held in memory for the extension host lifetime and are not independently verified. If Orchestrator omits or fails to send a report, the view can be incomplete.
+
+VS Code's proposed `chatParticipantAdditions` API includes `ChatSubagentToolInvocationData`, which can render subagent-style progress inside a chat participant's own response. It is not a subscription to native Copilot subagent events, is not a stable API for Marketplace extensions, and the Chat Participant API is deprecated and unsupported in the Copilot harness. This extension does not depend on it.
 
 The older `vscode.chat.createChatParticipant` API handles requests sent to that participant only. It is deprecated and is not supported in the Copilot harness, so it is not used as a monitor or as a substitute chat entry point here. The Orchestrator definition itself is contributed through `chatAgents`.
 
@@ -26,7 +30,7 @@ Only Orchestrator is user-invocable in this extension. The source definitions al
 
 ## Privacy
 
-The extension does not collect or transmit telemetry, prompts, source code, chat history, or activity records. It makes no network requests and stores no activity data. Copilot Chat and any user-configured tools have their own data handling and service behavior; this extension does not change those policies.
+The extension does not collect or transmit telemetry, prompts, source code, or chat history. It makes no network requests. Its activity tool stores only reported lifecycle metadata in memory, without prompts, results, file paths, or source content. The tool input and acknowledgement are part of the active Copilot conversation flow; Copilot and any user-configured tools have their own data handling and service behavior.
 
 ## Official references
 
@@ -36,3 +40,4 @@ The extension does not collect or transmit telemetry, prompts, source code, chat
 - [Use subagents in VS Code](https://code.visualstudio.com/docs/agents/run/subagents)
 - [VS Code API: chat namespace](https://code.visualstudio.com/api/references/vscode-api#chat)
 - [Chat participant API deprecation](https://code.visualstudio.com/api/extension-guides/ai/chat)
+- [Proposed API policy](https://code.visualstudio.com/api/advanced-topics/using-proposed-api)
