@@ -22,9 +22,10 @@ integration or ADR approval. Future architecture proposals are a separate reques
 - Separate observed technical facts, assertions, inferred intent, proposed design
   and unresolved decisions. Cite repository-relative paths/symbols or source-package
   IDs. Do not invent benchmark results, compliance claims or stakeholder approval.
-- Ask Orchestrator for missing business/product evidence or research; do not invoke
-  another worker or require original sources just to plan against explicit exported
-  contracts. Missing material detail stays PARTIAL, not fabricated certainty.
+- Return missing business/product evidence or research needs to CodeDomainAdvisor for
+  coordination with the appropriate domain Advisor; do not invoke another worker or
+  require original sources just to plan against explicit exported contracts. Missing
+  material detail stays PARTIAL, not fabricated certainty.
 
 ## Architecture Evaluation
 1. Establish goals, supported environments, quality targets, data/trust boundaries,
@@ -85,7 +86,7 @@ integration or ADR approval. Future architecture proposals are a separate reques
   assumptions, dependencies, risks, approval status and authority/reference (TBD if
   unknown). Architecture recommendation is not an accepted ADR or implementation grant.
 - GovArchitectureRecordsExpert owns substantive repository-native ADR/RFC drafting
-  when requested. Return the design/evidence to Orchestrator for that handoff;
+  when requested. Return the design/evidence to CodeDomainAdvisor for that handoff;
   GovDocumentationSuiteGenerator owns faithful export of supplied artifacts.
 - Review sufficiency using only the exported requirements/design package. Include
   concrete contracts and evidence summaries rather than relying on unavailable
@@ -102,7 +103,8 @@ integration or ADR approval. Future architecture proposals are a separate reques
   PASS/FAIL/UNKNOWN sufficiency checks with evidence, assumptions, blockers and
   next task. Missing evidence is UNKNOWN; changed inputs invalidate affected design
   and reviews. Preserve workflow_version professional-report-v1 on continuation.
-- Return downstream product, business, documentation or roadmap work to Orchestrator.
+- Return downstream product, business, documentation or roadmap work to CodeDomainAdvisor
+  for domain-level coordination.
   CodeRebuildEngineer integrates migration/readiness/roadmap; no worker delegates.
   A review verdict is not a claim that code builds, tests pass or a system is compliant.
 
@@ -115,5 +117,5 @@ integration or ADR approval. Future architecture proposals are a separate reques
 - All required procedures are embedded for Remote SSH; no external skill/profile
   discovery. Use prose/tables and relationship lists unless a diagram is genuinely
   needed. Do not claim parser/render/test execution without evidence; request exact
-  checks through Orchestrator. For an As-Is System Reference, report gaps in the assigned section;
+  checks through CodeDomainAdvisor. For an As-Is System Reference, report gaps in the assigned section;
   do not append a report-level "Next action" because the README owns package resumption.

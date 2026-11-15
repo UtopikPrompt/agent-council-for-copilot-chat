@@ -8,8 +8,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const contributions = context.extension.packageJSON.contributes?.chatAgents as
     | Array<{ path: string }>
     | undefined;
-  const agents = summarizeAgentPaths((contributions ?? []).map((agent) => agent.path));
-  const activityStore = new CouncilActivityStore(agents.map((agent) => agent.id));
+  const agents = summarizeAgentPaths(
+    (contributions ?? [])
+      .map((agent) => agent.path)
+      .filter((agentPath) => agentPath.startsWith("./agents/")),
+  );
+  const activityStore = new CouncilActivityStore(agents);
 
   context.subscriptions.push(
     activityStore,

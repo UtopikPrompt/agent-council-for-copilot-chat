@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
+import type { AgentSummary } from "./roster";
 
 export type CouncilActivityStatus = "dispatching" | "returned" | "failed";
 
 export interface CouncilActivity {
   runId: string;
   agent: string;
+  delegatedBy: string;
   status: CouncilActivityStatus;
   startedAt: number;
   updatedAt: number;
@@ -13,6 +15,7 @@ export interface CouncilActivity {
 export interface CouncilActivityReport {
   action: CouncilActivityStatus;
   agent: string;
+  delegatedBy: string;
   runId?: string;
 }
 
@@ -21,12 +24,18 @@ type ActivityListener = (activities: readonly CouncilActivity[]) => void;
 const MAX_ACTIVITY_RECORDS = 80;
 
 export class CouncilActivityStore {
+  private readonly agentsById: ReadonlyMap<string, AgentSummary>;
   private readonly allowedAgents: ReadonlySet<string>;
+  private readonly allowedDelegators: ReadonlySet<string>;
   private readonly records = new Map<string, CouncilActivity>();
   private readonly listeners = new Set<ActivityListener>();
 
-  constructor(agentNames: readonly string[]) {
-    this.allowedAgents = new Set(agentNames.filter((name) => name !== "Orchestrator"));
+  constructor(agents: readonly AgentSummary[]) {
+    this.agentsById = new Map(agents.map((agent) => [agent.id, agent]));
+    this.allowedAgents = new Set(agents.filter((agent) => agent.role !== "Coordinator").map((agent) => agent.id));
+    this.allowedDelegators = new Set([
+      ...agents.filter((agent) => agent.role !== "Specialist").map((agent) => agent.id),
+    ]);
   }
 
   subscribe(listener: ActivityListener): () => void {
@@ -44,6 +53,14 @@ export class CouncilActivityStore {
     if (!this.allowedAgents.has(report.agent)) {
       throw new Error(`Unknown council agent: ${report.agent}`);
     }
+    if (!this.allowedDelegators.has(report.delegatedBy)) {
+      throw new Error(`Unknown council delegator: ${report.delegatedBy}`);
+    }
+    const target = this.agentsById.get(report.agent);
+    const delegator = this.agentsById.get(report.delegatedBy);
+    if (delegator?.role === "Coordinator" && target?.role !== "Advisor") {
+      throw new Error("A Coordinator may delegate only to an Advisor");
+    }
 
     const now = Date.now();
     let activity: CouncilActivity;
@@ -57,18 +74,28 @@ export class CouncilActivityStore {
       activity = {
         runId,
         agent: report.agent,
+        delegatedBy: report.delegatedBy,
         status: "dispatching",
         startedAt: now,
         updatedAt: now,
       };
     } else {
       const runId = report.runId?.trim();
-      if (!runId) {
-        throw new Error("A runId is required to report a returned or failed dispatch");
+      const matches = runId
+        ? [this.records.get(runId)].filter((activity): activity is CouncilActivity => activity !== undefined)
+        : [...this.records.values()].filter((activity) =>
+          activity.agent === report.agent
+          && activity.delegatedBy === report.delegatedBy
+          && activity.status === "dispatching");
+      if (matches.length > 1) {
+        throw new Error(`Multiple dispatches are active for ${report.agent}; a runId is required`);
       }
 
-      const previous = this.records.get(runId);
-      if (!previous || previous.agent !== report.agent || previous.status !== "dispatching") {
+      const previous = matches[0];
+      if (!previous
+        || previous.agent !== report.agent
+        || previous.delegatedBy !== report.delegatedBy
+        || previous.status !== "dispatching") {
         throw new Error(`No matching dispatch is active for ${report.agent}`);
       }
 

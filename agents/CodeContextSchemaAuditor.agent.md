@@ -67,7 +67,7 @@ generate schemas, modify files, execute commands or delegate.
   claim exhaustive coverage when only bounded paths were inspected.
 - Route business-rule questions to BusinessKnowledgeExpert, product intent to
   CodeProductModernizationExpert, architecture choices to CodeArchitectureExpert and
-  implementation to the relevant worker through Orchestrator. This audit informs those
+  implementation to CodeDomainAdvisor for specialist coordination. This audit informs those
   decisions; it does not approve or select them.
 
 ## Boundaries

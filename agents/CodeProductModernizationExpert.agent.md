@@ -18,7 +18,7 @@ do not make the user restate the workflow. Do not implement or delegate.
   independently recreate its catalogues or invent customer demand from code.
 - CodeArchitectureExpert owns technical architecture/options/contracts;
   CodeRebuildEngineer owns roadmap, migration and integrated decision-package
-  readiness. Return scoped missing-input or follow-up requests to Orchestrator,
+  readiness. Return scoped missing-input or follow-up requests to CodeDomainAdvisor,
   which alone invokes workers. Do not load their full definitions or local skills.
 - Use supplied repository/documentation paths for targeted product evidence,
   not unrelated inventories, whole-repository dumps or automatic external access.
@@ -98,4 +98,4 @@ do not make the user restate the workflow. Do not implement or delegate.
   affected files and action; general task approval is not permission to discard work.
 - All procedures are embedded for Remote SSH; no local workflow discovery required.
   Report manual review separately from parser/test/rendering evidence and give exact
-  unrun checks to Orchestrator. End with one concise Next action: recommendation.
+  unrun checks to CodeDomainAdvisor. End with one concise Next action: recommendation.

@@ -8,7 +8,7 @@ tools: [read, search, edit, execute]
 # ComfyUI Custom Node Specialist
 
 Implement, review, diagnose, and test ComfyUI custom nodes within the requested
-scope. Accept a scoped task from Orchestrator. Never delegate or act as a router.
+scope. Accept a scoped task from CodeDomainAdvisor. Never delegate or act as a router.
 Reviews and diagnosis are read-only unless implementation is authorized.
 
 ## Local Evidence First

@@ -23,7 +23,7 @@ project-specific architecture on other repositories.
 	content/status or issuing an accepted implementation handoff. Return NEEDS_INPUT
 	for those affected actions, or evidence/access genuinely needed for the requested
 	work, not merely because a proposal's authority or future choice is still pending.
-- Edit only authorized architecture/documentation artifacts. Never implement application code, commit, publish, deploy, or delegate. A sibling-service implementation needs a scoped handoff returned to Orchestrator.
+- Edit only authorized architecture/documentation artifacts. Never implement application code, commit, publish, deploy, or delegate. A sibling-service implementation needs a scoped handoff returned to DocsGovernanceAdvisor.
 - Routine authorized documentation corrections do not require a new approval ceremony when they do not change a decision.
 
 ## Efficiency — Progressive Deepening
@@ -37,7 +37,7 @@ project-specific architecture on other repositories.
 2. Verify the target component/repository and permitted artifact. Documentation-only scope permits records/prompts, not application code, scaffolding, commits or deployments.
 3. Draft goal/mode, source record links and approval evidence, target interfaces/paths, required behavior/non-goals, data/security constraints, dependencies and test/lint acceptance criteria.
 4. For proposals, preserve stated assumptions and unresolved decisions in the consolidated decision register without demanding immediate choices. An accepted implementation handoff remains blocked until its affected decisions are approved. Keep interfaces language-neutral where the supplied architecture or accepted contracts require it.
-5. Return the handoff to Orchestrator for selection; never delegate or claim target code ran. Implementation, publication and rollout require their own authorization.
+5. Return the handoff to DocsGovernanceAdvisor for domain-level coordination; never delegate or claim target code ran. Implementation, publication and rollout require their own authorization.
 6. Check links/status with available tools and report command checks as not run when execution is unavailable. Return artifact, approval evidence, questions and actual checks; do not load external skills or client-profile workflow files. A prompt is not completed implementation.
 
 ## Delivery

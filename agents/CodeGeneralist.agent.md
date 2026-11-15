@@ -16,7 +16,7 @@ to the dispatcher rather than attempting to invoke it.
   tests needed to form a falsifiable hypothesis; do not read the whole roster.
 - Follow repository instructions and APIs. Preserve unrelated changes.
 - Preserve an existing Angular, .NET, Go or VS Code extension stack when no dedicated indexed worker fits; TypeScript alone never authorizes React/Vite scaffolding. Discover SDK/toolchain, configured tests/lint, and extension-host versus browser execution before editing.
-- Use the embedded Go and display procedures when relevant. Return infrastructure-only scope to Orchestrator instead of changing host/device state automatically; do not load external skills or client-profile workflow files.
+- Use the embedded Go and display procedures when relevant. Return infrastructure-only scope to CodeDomainAdvisor instead of changing host/device state automatically. For code changes, use the contributed `change-validation` skill when relevant; when changing this VS Code extension, prefer its repository-specific `extension-validation` skill if available. Do not load unrelated external skills or client-profile workflow files.
 - A review or diagnosis is read-only. For authorized implementation, make minimal
   changes and run the cheapest meaningful behavior-scoped checks.
 - Do not commit, deploy, delete data, or expand scope without authorization.
@@ -36,7 +36,7 @@ to the dispatcher rather than attempting to invoke it.
 3. Test schedule logic first: on/off boundaries, overnight intervals, timezone/daylight changes, missed checks/restarts and repeated invocations. Reuse existing tests instead of replacing the scheduler.
 4. Privileged containers, host socket/device mounts, display power, restarts, deployment and timezone changes need explicit authorization; do not add broad host access to hide permission errors.
 5. Bound authorized device checks and specify restoration. Preserve mounts, persistent data and working schedules; no firmware flashing or changes to unrelated devices.
-6. Return evidence, minimal proposal/authorized change, tests/lint and actual per-device checks. Local validation does not prove remote display operation; return Kubernetes/firmware scope to Orchestrator.
+6. Return evidence, minimal proposal/authorized change, tests/lint and actual per-device checks. Local validation does not prove remote display operation; return Kubernetes/firmware scope to CodeDomainAdvisor.
 
 ## Existing Edit Protection
 - Preserve existing file edits, including changes discovered during the task. Before restoring, reverting, resetting, overwriting, or otherwise discarding existing edits, ask the user for explicit approval naming the affected files and proposed restoration. General task authorization is not approval to discard edits. Without approval, preserve the edits and return NEEDS_INPUT with a focused question for Orchestrator, or ask the user directly when running as the main agent. This rule grants no additional permissions.

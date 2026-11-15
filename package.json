@@ -12,8 +12,15 @@
   "engines": {
     "vscode": "^1.146.0"
   },
-  "categories": ["Other"],
-  "keywords": ["copilot", "agents", "council", "orchestration"],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "copilot",
+    "agents",
+    "council",
+    "orchestration"
+  ],
   "main": "./dist/src/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -21,7 +28,7 @@
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node --test tests/roster.test.cjs",
     "test:host": "npm run compile && node tests/runTest.cjs",
-    "package": "npm run compile && vsce package --no-dependencies --skip-license"
+    "package": "npm run compile && vsce package --skip-license"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
@@ -36,63 +43,166 @@
     }
   },
   "contributes": {
+    "chatSkills": [
+      {
+        "path": "./skills/change-validation/SKILL.md"
+      }
+    ],
     "chatAgents": [
-      { "path": "./agents/AgentOptimizer.agent.md" },
-      { "path": "./agents/Brainstorm.agent.md" },
-      { "path": "./agents/BusinessKnowledgeAdvisor.agent.md" },
-      { "path": "./agents/BusinessKnowledgeExpert.agent.md" },
-      { "path": "./agents/CodeArchitectureExpert.agent.md" },
-      { "path": "./agents/CodeBackendAdvisor.agent.md" },
-      { "path": "./agents/CodeComfyUICustomNodeSpecialist.agent.md" },
-      { "path": "./agents/CodeContextSchemaAuditor.agent.md" },
-      { "path": "./agents/CodeDatabaseORMGenerator.agent.md" },
-      { "path": "./agents/CodeDesignSystemSpecialist.agent.md" },
-      { "path": "./agents/CodeDomainAdvisor.agent.md" },
-      { "path": "./agents/CodeExpressSpecialist.agent.md" },
-      { "path": "./agents/CodeFastApiSpecialist.agent.md" },
-      { "path": "./agents/CodeFrameworkDiagnostician.agent.md" },
-      { "path": "./agents/CodeFrontendAdvisor.agent.md" },
-      { "path": "./agents/CodeGeneralist.agent.md" },
-      { "path": "./agents/CodeGraphQLTRPCAgent.agent.md" },
-      { "path": "./agents/CodeMockupWireframeSpecialist.agent.md" },
-      { "path": "./agents/CodeNextJsSpecialist.agent.md" },
-      { "path": "./agents/CodeProductModernizationExpert.agent.md" },
-      { "path": "./agents/CodeQualityGuardrailReviewer.agent.md" },
-      { "path": "./agents/CodeReactViteSpecialist.agent.md" },
-      { "path": "./agents/CodeRebuildEngineer.agent.md" },
-      { "path": "./agents/CodeSpringBootSpecialist.agent.md" },
-      { "path": "./agents/ContextSummarizer.agent.md" },
-      { "path": "./agents/DocsGovernanceAdvisor.agent.md" },
-      { "path": "./agents/GovArchitectureRecordsExpert.agent.md" },
-      { "path": "./agents/GovDocumentationSuiteGenerator.agent.md" },
-      { "path": "./agents/GovGithubAgent.agent.md" },
-      { "path": "./agents/GovGitWorkflowAgent.agent.md" },
-      { "path": "./agents/GovOfficeDocumentGenerator.agent.md" },
-      { "path": "./agents/GovWebResearchAgent.agent.md" },
-      { "path": "./agents/InfraCIDiagnostics.agent.md" },
-      { "path": "./agents/InfraCloudDeploymentAgent.agent.md" },
-      { "path": "./agents/InfraDevContainerSpecialist.agent.md" },
-      { "path": "./agents/InfraDevOpsAdvisor.agent.md" },
-      { "path": "./agents/InfraIaCGenerator.agent.md" },
-      { "path": "./agents/InfraKubernetesEngineer.agent.md" },
-      { "path": "./agents/InfraLLMInferenceSpecialist.agent.md" },
-      { "path": "./agents/InfraMCPServerGenerator.agent.md" },
-      { "path": "./agents/InfraMonorepoManager.agent.md" },
-      { "path": "./agents/InfraObservabilitySpecialist.agent.md" },
-      { "path": "./agents/InfraPerformanceProfiler.agent.md" },
-      { "path": "./agents/InfraReleaseManager.agent.md" },
-      { "path": "./agents/InfraSecurityAuthAgent.agent.md" },
-      { "path": "./agents/InfraTestInfrastructureGenerator.agent.md" },
-      { "path": "./agents/MultiLanguageBuilder.agent.md" },
-      { "path": "./agents/Orchestrator.agent.md" },
-      { "path": "./agents/UtilityAdvisor.agent.md" }
+      {
+        "path": "./agents/AgentOptimizer.agent.md"
+      },
+      {
+        "path": "./agents/Brainstorm.agent.md"
+      },
+      {
+        "path": "./agents/BusinessKnowledgeAdvisor.agent.md"
+      },
+      {
+        "path": "./agents/BusinessKnowledgeExpert.agent.md"
+      },
+      {
+        "path": "./agents/CodeArchitectureExpert.agent.md"
+      },
+      {
+        "path": "./agents/CodeBackendAdvisor.agent.md"
+      },
+      {
+        "path": "./agents/CodeComfyUICustomNodeSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/CodeContextSchemaAuditor.agent.md"
+      },
+      {
+        "path": "./agents/CodeDatabaseORMGenerator.agent.md"
+      },
+      {
+        "path": "./agents/CodeDesignSystemSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/CodeDomainAdvisor.agent.md"
+      },
+      {
+        "path": "./agents/CodeExpressSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/CodeFastApiSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/CodeFrameworkDiagnostician.agent.md"
+      },
+      {
+        "path": "./agents/CodeFrontendAdvisor.agent.md"
+      },
+      {
+        "path": "./agents/CodeGeneralist.agent.md"
+      },
+      {
+        "path": "./agents/CodeGraphQLTRPCAgent.agent.md"
+      },
+      {
+        "path": "./agents/CodeMockupWireframeSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/CodeNextJsSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/CodeProductModernizationExpert.agent.md"
+      },
+      {
+        "path": "./agents/CodeQualityGuardrailReviewer.agent.md"
+      },
+      {
+        "path": "./agents/CodeReactViteSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/CodeRebuildEngineer.agent.md"
+      },
+      {
+        "path": "./agents/CodeSpringBootSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/ContextSummarizer.agent.md"
+      },
+      {
+        "path": "./agents/DocsGovernanceAdvisor.agent.md"
+      },
+      {
+        "path": "./agents/GovArchitectureRecordsExpert.agent.md"
+      },
+      {
+        "path": "./agents/GovDocumentationSuiteGenerator.agent.md"
+      },
+      {
+        "path": "./agents/GovGithubAgent.agent.md"
+      },
+      {
+        "path": "./agents/GovGitWorkflowAgent.agent.md"
+      },
+      {
+        "path": "./agents/GovOfficeDocumentGenerator.agent.md"
+      },
+      {
+        "path": "./agents/GovWebResearchAgent.agent.md"
+      },
+      {
+        "path": "./agents/InfraCIDiagnostics.agent.md"
+      },
+      {
+        "path": "./agents/InfraCloudDeploymentAgent.agent.md"
+      },
+      {
+        "path": "./agents/InfraDevContainerSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/InfraDevOpsAdvisor.agent.md"
+      },
+      {
+        "path": "./agents/InfraIaCGenerator.agent.md"
+      },
+      {
+        "path": "./agents/InfraKubernetesEngineer.agent.md"
+      },
+      {
+        "path": "./agents/InfraLLMInferenceSpecialist.agent.md"
+      },
+      {
+        "path": "./agents/InfraMCPServerGenerator.agent.md"
+      },
+      {
+        "path": "./agents/InfraMonorepoManager.agent.md"
+      },
+      {
+        "path": "./agents/InfraObservabilitySpecialist.agent.md"
+      },
+      {
+        "path": "./agents/InfraPerformanceProfiler.agent.md"
+      },
+      {
+        "path": "./agents/InfraReleaseManager.agent.md"
+      },
+      {
+        "path": "./agents/InfraSecurityAuthAgent.agent.md"
+      },
+      {
+        "path": "./agents/InfraTestInfrastructureGenerator.agent.md"
+      },
+      {
+        "path": "./agents/MultiLanguageBuilder.agent.md"
+      },
+      {
+        "path": "./agents/Orchestrator.agent.md"
+      },
+      {
+        "path": "./agents/UtilityAdvisor.agent.md"
+      }
     ],
     "languageModelTools": [
       {
         "name": "utopikAgentCouncil_reportActivity",
         "displayName": "Report Council Activity",
-        "userDescription": "Report Orchestrator's agent dispatch status to the local council view.",
-        "modelDescription": "Record an Orchestrator-reported lifecycle event for a contributed agent. Call with action dispatching immediately before invoking an agent; save the returned runId. After the invocation returns, report returned or failed using the same agent and runId. Only send the canonical agent name, action, and runId. Never include task prompts, results, file paths, source content, or secrets. These reports are not independent verification of Copilot runtime activity.",
+        "userDescription": "Report a council agent handoff to the local office view.",
+        "modelDescription": "Record a reported lifecycle event for a contributed agent handoff. Every agent-tool edge needs its own separate dispatching and returned/failed report pair: an Orchestrator-to-Advisor report does not cover the Advisor-to-Specialist edge. Immediately before each agent invocation, report dispatching with the target agent and delegatedBy set to your own canonical agent name; capture its returned runId. After that same invocation completes, report returned or failed with the same target, delegatedBy, and exact runId. Never reuse an outer handoff's runId, skip a report, invent a runId, or include task prompts, results, file paths, source content, or secrets. These reports are not independent verification of Copilot runtime activity.",
         "canBeReferencedInPrompt": true,
         "toolReferenceName": "reportCouncilActivity",
         "inputSchema": {
@@ -100,19 +210,31 @@
           "properties": {
             "action": {
               "type": "string",
-              "enum": ["dispatching", "returned", "failed"],
+              "enum": [
+                "dispatching",
+                "returned",
+                "failed"
+              ],
               "description": "Use dispatching before delegation, then returned or failed after the agent tool responds."
             },
             "agent": {
               "type": "string",
-              "description": "Exact canonical name of a contributed agent other than Orchestrator."
+              "description": "Exact canonical name of the contributed agent being invoked."
+            },
+            "delegatedBy": {
+              "type": "string",
+              "description": "Exact canonical name of the agent invoking the target, such as Orchestrator or a domain Advisor."
             },
             "runId": {
               "type": "string",
-              "description": "Omit for dispatching; reuse the runId returned by that call for returned or failed."
+              "description": "Optional. Omit for a unique active handoff. If multiple handoffs for the same target and delegator are active, use the exact ID returned by the matching dispatch report; never invent one."
             }
           },
-          "required": ["action", "agent"],
+          "required": [
+            "action",
+            "agent",
+            "delegatedBy"
+          ],
           "additionalProperties": false
         }
       }

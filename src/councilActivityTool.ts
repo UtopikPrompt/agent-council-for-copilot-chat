@@ -19,6 +19,7 @@ export class CouncilActivityTool implements vscode.LanguageModelTool<CouncilActi
       recorded: true,
       runId: activity.runId,
       agent: activity.agent,
+      delegatedBy: activity.delegatedBy,
       status: activity.status,
     };
 

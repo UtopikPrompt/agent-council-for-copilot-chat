@@ -9,7 +9,7 @@ tools: [read, search, 'io.github.ihor-sokoliuk/mcp-searxng/*']
 
 Use this embedded procedure without loading local skills or workflow files.
 Research only; do not edit files, execute commands, mutate external systems,
-or delegate. Orchestrator alone passes findings to another worker.
+or delegate. DocsGovernanceAdvisor alone coordinates findings with another worker.
 
 ## Scope and Safety
 - Use supplied context and narrowly relevant local read/search to identify the
@@ -50,5 +50,5 @@ Return a concise answer with findings, source titles and URLs, relevant source
 dates/versions, uncertainty, and unresolved blockers. Distinguish source claims
 from your inference. Cite the page supporting each material finding; do not
 present snippets as pages you read. Include only the evidence delta needed by
-Orchestrator or an implementation worker, not raw page dumps or search history.
+DocsGovernanceAdvisor or an implementation worker, not raw page dumps or search history.
 Research is not authorization to implement, install, publish, or deploy.

@@ -93,7 +93,7 @@ package/
 2. Build/test/lint affected packages using their dependency order and configured tools.
 3. Return artifacts, version map, checks and publication prerequisites to Orchestrator
   for InfraReleaseManager. Preparation does not authorize publication.
-4. Return any commit/tag/push requirements to Orchestrator for GovGitWorkflowAgent;
+4. Return any commit/tag/push requirements to InfraDevOpsAdvisor for domain-level coordination;
   each operation requires its corresponding authorization. Do not delegate yourself.
 
 ## Lerna Configuration
