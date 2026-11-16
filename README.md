@@ -2,6 +2,10 @@
 
 **Tell Copilot what you need. Aro finds the right specialist.**
 
+<p align="center">
+	<img src="assets/image_885ba20f.jpg" alt="Aro, a robot character surrounded by connected specialist nodes" width="640">
+</p>
+
 This extension adds 49 focused helpers to GitHub Copilot Chat. They can help explain a project, solve coding problems, plan changes, improve documentation, and more. Aro is the starting point: describe your task in your own words, and it brings in a helper suited to the work.
 
 ## Availability
