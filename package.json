@@ -3,7 +3,7 @@
     "displayName": "Agent Roster for Copilot Chat",
     "description": "A specialist agent roster and reusable workflow skills for GitHub Copilot Chat.",
     "icon": "assets/extension-icon.png",
-    "version": "0.1.0",
+    "version": "0.0.0",
     "publisher": "UtopikPrompt",
     "license": "PolyForm-Noncommercial-1.0.0",
     "engines": {
