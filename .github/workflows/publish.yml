@@ -1,7 +1,8 @@
 name: Publish VS Code extension
 
 on:
-    workflow_dispatch:
+    release:
+        types: [published]
 
 permissions:
     contents: read
@@ -20,11 +21,13 @@ jobs:
                   node-version: 20
                   cache: npm
             - run: npm ci
-            - name: Assign unique patch version
+            - name: Set version from release tag
+              env:
+                  RELEASE_TAG: ${{ github.event.release.tag_name }}
               run: |
-                  version=$(node -e "const [major, minor, patch] = require('./package.json').version.split('.').map(Number); console.log([major, minor, patch + Number(process.env.GITHUB_RUN_NUMBER)].join('.'))")
-                  npm version "$version" --no-git-tag-version
-                  echo "Publishing version $version"
+                  version="${RELEASE_TAG#v}"
+                    npm version "$version" --no-git-tag-version
+                    echo "Publishing version $version"
             - name: Run checks
               run: npm run vscode:prepublish
             - name: Publish to VS Code Marketplace
