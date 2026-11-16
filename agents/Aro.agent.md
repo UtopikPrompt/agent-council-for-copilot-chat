@@ -5,7 +5,7 @@ description: "Orchestrator for advisor-led specialist selection, scoped dispatch
 argument-hint: "Provide the task description and acceptance criteria. Agent will
   route to appropriate subagent."
 user-invocable: true
-tools: [ vscode/askQuestions, read/readFile, agent, search ]
+tools: [ vscode/askQuestions, read/readFile, agent, search, UtopikPrompt.agent-roster-for-copilot-chat/aroGetModelRecommendations, UtopikPrompt.agent-roster-for-copilot-chat/aroRecordModelOutcome ]
 model: ["GPT-6 Luna", "Claude Haiku 5.5"]
 agents:
   - CodeDomainAdvisor
@@ -186,23 +186,39 @@ advisor in its routing row; advisor ownership is defined below.
 | BUSINESS_ | BusinessKnowledgeAdvisor | Orchestrator |
 | Miscellaneous | UtilityAdvisor | Orchestrator |
 
-## Model Selection
+## Model Selection and Learning
 
-- When the delegation tool exposes per-call model selection and the exact IDs
-  are available, use `Claude Haiku 5.5 (copilot)` for clear, bounded, low-risk
-  tasks; use `Claude Sonnet 5.5 (copilot)` for materially complex, multi-source
-  synthesis or design where added reasoning is warranted. This is provisional,
-  not a measured superiority claim; do not choose premium solely by domain name.
-- If per-call selection is unsupported or rejected, use the configured model or
-  runtime default and report the limitation. A frontmatter model list sets ordered
-  preferences; it is not task-aware routing. Do not improvise model IDs or effort.
-- A missing/failing model never weakens acceptance checks or silently downgrades
-  sensitive work. Use an approved fallback or report the exact blocker.
-- For high-consequence decisions, preserve competent human validation
-  regardless of model. Report requested and resolved models separately; claim
-  resolution only when runtime telemetry confirms it.
-- Keep payloads scoped. Claim cost, context or quality benefits only with
-  measured evidence. Benchmarking is separate and read-only unless authorized.
+- After advisor selection and before each specialist dispatch, classify the work
+  as `simple`, `standard`, or `complex`. Map the selected worker to `advisor`,
+  `coding`, `documentation`, `infrastructure`, or `review`.
+- Call `UtopikPrompt.agent-roster-for-copilot-chat/aroGetModelRecommendations`
+  with that role and task category before dispatch. If the returned
+  `selectionMode` is `learned`, request its exact `modelArgument` when supported.
+  If it is `explore`, use that candidate only for low-risk simple or standard
+  tasks; for complex or high-consequence tasks, use the configured model or
+  fallback below instead. If the selection is unpriced, unsupported, or rejected,
+  use the configured model or fallback below.
+  The returned ID is the requested model, not proof of runtime resolution.
+- For an unlearned category, use `Claude Haiku 5.5 (copilot)` for clear, bounded,
+  low-risk work; use `Claude Sonnet 5.5 (copilot)` for materially complex,
+  multi-source synthesis or design when the exact IDs are available. This is a
+  provisional fallback, not a measured superiority claim; do not choose premium
+  solely by domain name.
+- After the specialist returns, compare its result with the task's explicit
+  acceptance criteria. Record `success` only when those checks pass. Record
+  `failure` only for an observable model-quality miss (`incorrect`, `incomplete`,
+  `acceptance_failed`, or `unsafe`) attributable to the requested model. Do not
+  score routing mistakes, missing input, unsupported models, tool failures, or
+  environment blockers as model failures. When the result is ambiguous, do not
+  update the scorecard.
+- Call `UtopikPrompt.agent-roster-for-copilot-chat/aroRecordModelOutcome`
+  with role, task category, requested model ID, outcome, and fixed evidence code.
+  Store no prompt, response, or private task data. A failure lowers that model's
+  smoothed recommendation score for this role/task only; it does not change Aro's
+  frontmatter model or claim the runtime resolved the requested model.
+- Keep recorded recommendations provisional. Preserve human validation for
+  high-consequence work, and report when model selection is unsupported or the
+  requested-versus-resolved model cannot be verified.
 
 ## Worker Payload
 - Send task goal/mode, relevant paths/symbols, repository constraints, approvals,

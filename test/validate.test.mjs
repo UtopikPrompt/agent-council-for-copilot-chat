@@ -29,16 +29,25 @@ test('validates the complete council and all extracted workflow consumers', asyn
     assert.deepEqual(await validate(), { agents: 49, skills: 10 });
 });
 
-test('Aro selects delegated models by task complexity when exact IDs are available', async () => {
+test('Aro learns model outcomes by role and task using evidence-gated tools', async () => {
     const { metadata, body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+    const extensionId = `${manifest.publisher}.${manifest.name}`;
     assert.deepEqual(metadata.model, ['GPT-6 Luna', 'Claude Haiku 5.5']);
-    const modelSelection = body.split('## Model Selection\n')[1]?.split(/^## /m)[0];
+    assert.ok(metadata.tools.includes(`${extensionId}/aroGetModelRecommendations`));
+    assert.ok(metadata.tools.includes(`${extensionId}/aroRecordModelOutcome`));
+    const modelSelection = body.split('## Model Selection and Learning\n')[1]?.split(/^## /m)[0];
     assert.ok(modelSelection, 'Missing model selection guidance');
-    assert.match(modelSelection, /Claude Haiku 5\.5 \(copilot\).*clear, bounded, low-risk/s);
-    assert.match(modelSelection, /Claude Sonnet 5\.5 \(copilot\).*complex, multi-source/s);
-    assert.match(modelSelection, /If per-call selection is unsupported or rejected, use the configured model or\s+runtime default/);
-    assert.match(modelSelection, /do not choose premium solely by domain name/);
-    assert.match(modelSelection, /claim\s+resolution only when runtime telemetry confirms it/);
+    assert.match(modelSelection, /aroGetModelRecommendations/);
+    assert.match(modelSelection, /selectionMode/);
+    assert.match(modelSelection, /for complex or high-consequence tasks, use the configured model or\s+fallback below/);
+    assert.match(modelSelection, /aroRecordModelOutcome/);
+    assert.match(modelSelection, /Do not\s+score routing mistakes,\s+missing input,\s+unsupported models, tool failures/);
+    assert.ok(modelSelection.includes('Claude Haiku 5.5 (copilot)'));
+    assert.ok(modelSelection.includes('clear, bounded'));
+    assert.ok(modelSelection.includes('low-risk'));
+    assert.ok(modelSelection.includes('Claude Sonnet 5.5 (copilot)'));
+    assert.ok(modelSelection.includes('materially complex'));
 });
 
 test('preserves economical model preferences on configured selection advisors', async () => {
@@ -152,14 +161,51 @@ test('rejects references to skills missing from the extraction registry', async 
     await assert.rejects(validate(directory), /Unregistered extracted skill/);
 });
 
-test('benchmarking is explicit-only and package has no runtime entry point', async () => {
-    const skill = await readFile(path.join(root, 'skills/agent-model-benchmark/SKILL.md'), 'utf8');
-    assert.equal(parseCustomization(skill, 'benchmark').metadata['disable-model-invocation'], true);
+test('Aro model learning is automatic, persistent, and has no manual benchmark UI', async () => {
     const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-    assert.equal(manifest.main, undefined);
+    assert.equal(manifest.main, './src/extension.js');
+    assert.ok(manifest.activationEvents.includes('onCommand:agentRoster.openModelLearning'));
+    assert.ok(manifest.activationEvents.includes('onView:agentRoster.modelLearning'));
+    assert.ok(manifest.contributes.commands.some(command => command.command === 'agentRoster.openModelLearning'));
+    assert.ok(manifest.contributes.viewsContainers.activitybar.some(container => container.id === 'agentRoster' && container.icon === 'assets/aro-wireframe.svg'));
+    assert.ok(manifest.contributes.views.agentRoster.some(view => view.id === 'agentRoster.modelLearning' && view.type === undefined));
+    for (const name of ['aroGetModelRecommendations', 'aroRecordModelOutcome']) {
+        const tool = manifest.contributes.languageModelTools.find(entry => entry.name === name);
+        assert.ok(tool);
+        assert.equal(tool.canBeReferencedInPrompt, true);
+        assert.equal(tool.toolReferenceName, name);
+    }
+    const aro = await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8');
+    const extensionId = `${manifest.publisher}.${manifest.name}`;
+    for (const name of ['aroGetModelRecommendations', 'aroRecordModelOutcome']) {
+        assert.ok(aro.includes(`${extensionId}/${name}`));
+    }
     assert.equal(manifest.browser, undefined);
     assert.equal(manifest.enabledApiProposals, undefined);
     assert.equal(manifest.dependencies, undefined);
+    const extension = await readFile(path.join(root, 'src/extension.js'), 'utf8');
+    assert.match(extension, /registerTreeDataProvider\('agentRoster\.modelLearning'/);
+    assert.doesNotMatch(extension, /registerWebviewViewProvider\('agentRoster\.modelLearning'/);
+    assert.match(extension, /vscode\.lm\.registerTool\('aroGetModelRecommendations'/);
+    assert.match(extension, /vscode\.lm\.registerTool\('aroRecordModelOutcome'/);
+    assert.match(extension, /context\.globalState\.update\(LEARNING_STORAGE_KEY/);
+    assert.match(extension, /getLearningDashboard/);
+    assert.equal((extension.match(/img-src \$\{webview\.cspSource\}/g) || []).length, 1);
+    assert.doesNotMatch(extension, /message\.type === 'benchmark'/);
+    assert.doesNotMatch(extension, /model\.sendRequest/);
+    assert.match(extension, /getModelPricing\(model\)/);
+    const handlerRegistration = extension.indexOf('panel.webview.onDidReceiveMessage(message =>', extension.indexOf('function openModelLearning'));
+    const htmlAssignment = extension.indexOf('panel.webview.html = getLearningHtml', extension.indexOf('function openModelLearning'));
+    assert.ok(handlerRegistration >= 0 && handlerRegistration < htmlAssignment);
+    assert.match(extension, /selectChatModelsWithTimeout/);
+    assert.match(extension, /MODEL_DISCOVERY_TIMEOUT_MS = 15_000/);
+    assert.match(extension, /id="model-count"/);
+    const dashboard = await readFile(path.join(root, 'media/model-learning-dashboard.js'), 'utf8');
+    assert.match(dashboard, /refreshLearning/);
+    assert.match(dashboard, /vscode\.postMessage\(\{ type: 'ready' \}\)/);
+    assert.match(dashboard, /recommendedModelId/);
+    assert.doesNotMatch(dashboard, /toggle-inventory/);
+    assert.doesNotMatch(dashboard, /sendRequest|benchmark|textarea|scorecard.*set/i);
 });
 
 test('Aro consults the required domain advisor before every specialist dispatch', async () => {

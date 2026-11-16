@@ -4,6 +4,56 @@ Aro is the dispatcher. Advisors select a worker without tools; workers do not de
 
 Workers keep one skill-loading policy per consuming agent and load required skills from runtime-discovered locations, not paths guessed from the target workspace. Missing procedures return to Aro for resolution. Read-only assessment workers return complete content; Aro arranges advisor-selected documentation persistence and verifies saved artifacts without granting analysts edit tools.
 
+## Aro Routing
+
+Aro consults the relevant advisor before every specialist call, even when the right specialist seems obvious. If an advisor cannot recommend a valid worker, Aro corrects the candidate scope or asks for clarification; it does not skip advisor selection.
+
+```mermaid
+sequenceDiagram
+	actor U as You
+	participant Aro
+	participant Advisor as Relevant advisor
+	participant W1 as Specialist A
+	participant W2 as Specialist B
+
+	U->>Aro: Describe a task
+	Aro->>Aro: Scope request and split composite work
+
+	alt One specialist
+		Aro->>Advisor: Send task and candidate routes
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>Aro: Validate recommendation and choose model
+		Aro->>W1: Send scoped task when supported
+		W1-->>Aro: Return result and evidence
+	else Independent subtasks
+		par Subtask A
+			Aro->>Advisor: Consult for this specialist call
+			Advisor-->>Aro: Recommend one indexed worker
+			Aro->>W1: Send scoped subtask when supported
+			W1-->>Aro: Return result and evidence
+		and Subtask B
+			Aro->>Advisor: Consult for this specialist call
+			Advisor-->>Aro: Recommend one indexed worker
+			Aro->>W2: Send scoped subtask when supported
+			W2-->>Aro: Return result and evidence
+		end
+	else Dependent or overlapping subtasks
+		Aro->>Advisor: Consult for prerequisite specialist call
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>W1: Send prerequisite subtask
+		W1-->>Aro: Return result and evidence
+		Aro->>Advisor: Consult for dependent call with required delta
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>W2: Send dependent subtask
+		W2-->>Aro: Return result and evidence
+	end
+
+	Aro->>Aro: Validate and reconcile results
+	Aro-->>U: Return outcome, checks, and limitations
+```
+
+Model choice is per call: use the configured or runtime default unless exact supported model IDs are available. Use a more economical option for clear, bounded, low-risk work and a higher-reasoning option when task complexity warrants it. Report requested and resolved models separately; claim resolution only when runtime telemetry confirms it.
+
 | Agent | Purpose |
 | --- | --- |
 | [AgentOptimizer](../agents/AgentOptimizer.agent.md) | Analyze and optimize a VS Code agent (its definition, tools, description/WHEN trigger, skills, and instructions) for the explicitly named target agent, or the active agent when no target was supplied. Definition files may be inside the open workspace. Invoke when an agent won't load, ignores instructions, fails to invoke tools/skills, has broken base-on-context features, shows slow, unexpected behavior, or routes tasks poorly. Used especially from remote SSH sessions where local skill files are not available.  |

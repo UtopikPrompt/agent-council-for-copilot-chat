@@ -8,24 +8,12 @@
 
 This extension adds 49 focused helpers to GitHub Copilot Chat. They can help explain a project, solve coding problems, plan changes, improve documentation, and more. Aro is the starting point: describe your task in your own words, and it brings in a helper suited to the work.
 
-## Availability
-
-This extension is not currently listed in the VS Code Marketplace, so there is no Store install link yet.
-
 ## Get Started
 
-You’ll need VS Code 1.111 or newer and access to GitHub Copilot Chat with agent support.
-
-Once the extension is available in your VS Code, open Copilot Chat, choose **Aro**, and describe what you need. For example:
+Open Copilot Chat, choose **Aro** agent, and describe what you need. For example:
 
 ```text
 I’m new to this project. Explain what it does and where I should start.
-```
-
-Or:
-
-```text
-Please make this document easier for a non-technical reader to understand.
 ```
 
 You can ask Aro to make a plan before changing anything. Review suggestions and approve changes through the usual Copilot prompts.
@@ -34,82 +22,96 @@ You can ask Aro to make a plan before changing anything. Review suggestions and 
 
 The roster includes 49 specialists. Start with Aro: describe what you need, and Aro selects a relevant specialist.
 
-**[View all 49 agents](docs/agents.md)**
-
-- Understand a project or a piece of code
-- Find and fix software problems
-- Plan or review a change
-- Improve documentation
-- Get help with architecture, business processes, and infrastructure
-
 <details>
-<summary>How Aro routes a request</summary>
+<summary>Browse all 49 agents</summary>
 
-Aro consults the relevant advisor before every specialist call, even when the right specialist seems obvious.
-
-```mermaid
-sequenceDiagram
-	actor U as You
-	participant Aro
-	participant Advisor as Relevant advisor
-	participant W1 as Specialist A
-	participant W2 as Specialist B
-
-	U->>Aro: Describe a task
-	Aro->>Aro: Scope the request and split composite work into subtasks
-
-	alt One specialist
-		Aro->>Advisor: Send task and matching candidate routes
-		Advisor-->>Aro: Recommend one indexed worker
-		Aro->>Aro: Validate recommendation against candidates and allowlist
-		Aro->>Aro: Choose a model for this call
-		Aro->>W1: Send scoped task and model when supported
-		W1-->>Aro: Return result and evidence
-	else Independent subtasks with disjoint write sets
-		par Subtask A
-			Aro->>Advisor: Consult for this specialist call
-			Advisor-->>Aro: Recommend one indexed worker
-			Aro->>Aro: Validate recommendation and choose a model for this call
-			Aro->>W1: Send scoped subtask and model when supported
-			W1-->>Aro: Return result and evidence
-		and Subtask B
-			Aro->>Advisor: Consult for this specialist call
-			Advisor-->>Aro: Recommend one indexed worker
-			Aro->>Aro: Validate recommendation and choose a model for this call
-			Aro->>W2: Send scoped subtask and model when supported
-			W2-->>Aro: Return result and evidence
-		end
-	else Dependent or overlapping subtasks
-		Aro->>Advisor: Consult for prerequisite specialist call
-		Advisor-->>Aro: Recommend one indexed worker
-		Aro->>Aro: Validate recommendation and choose a model for this call
-		Aro->>W1: Send prerequisite subtask and model when supported
-		W1-->>Aro: Return result and evidence
-		Aro->>Advisor: Consult for dependent call with required delta
-		Advisor-->>Aro: Recommend one indexed worker
-		Aro->>Aro: Validate recommendation and choose a model for this call
-		Aro->>W2: Send dependent subtask and model when supported
-		W2-->>Aro: Return result and evidence
-	end
-
-	Aro->>Aro: Validate and reconcile results
-	Aro-->>U: Return outcome, checks, and limitations
-
-```
-
-If an advisor cannot recommend a valid worker, Aro corrects the candidate scope or asks for clarification; it does not skip advisor selection. Model choice is per call: use Claude Haiku 5.5 for clear, bounded, low-risk work and Claude Sonnet 5.5 for materially complex synthesis or design only when exact per-call IDs are available. If model selection is unsupported or rejected, use the configured model or runtime default and report the limitation. Report requested and resolved models separately; claim resolution only when runtime telemetry confirms it.
+| Agent | Purpose |
+| --- | --- |
+| [AgentOptimizer](agents/AgentOptimizer.agent.md) | Analyze and optimize VS Code agents, including tools, triggers, skills, and instructions. |
+| [Brainstorm](agents/Brainstorm.agent.md) | Generate architectural alternatives, edge cases, and code-pattern options. |
+| [BusinessKnowledgeAdvisor](agents/BusinessKnowledgeAdvisor.agent.md) | Select specialists for business needs, rules, processes, and impact questions. |
+| [BusinessKnowledgeExpert](agents/BusinessKnowledgeExpert.agent.md) | Produce evidence-grounded business-rule, process, and impact analyses. |
+| [CodeArchitectureExpert](agents/CodeArchitectureExpert.agent.md) | Document current architecture or propose a target architecture from supplied evidence. |
+| [CodeBackendAdvisor](agents/CodeBackendAdvisor.agent.md) | Select backend approaches for APIs, frameworks, GraphQL/tRPC, and databases. |
+| [CodeComfyUICustomNodeSpecialist](agents/CodeComfyUICustomNodeSpecialist.agent.md) | Develop and debug ComfyUI custom nodes, packs, and frontend extensions. |
+| [CodeContextSchemaAuditor](agents/CodeContextSchemaAuditor.agent.md) | Audit schemas, dependencies, configuration, and environment constraints. |
+| [CodeDatabaseORMGenerator](agents/CodeDatabaseORMGenerator.agent.md) | Generate database schemas, migrations, indexes, and ORM setup. |
+| [CodeDesignSystemSpecialist](agents/CodeDesignSystemSpecialist.agent.md) | Build shared UI components, design tokens, themes, and documentation. |
+| [CodeDomainAdvisor](agents/CodeDomainAdvisor.agent.md) | Select coding specialists for cross-stack work. |
+| [CodeExpressSpecialist](agents/CodeExpressSpecialist.agent.md) | Implement and debug Express APIs using repository conventions. |
+| [CodeFastApiSpecialist](agents/CodeFastApiSpecialist.agent.md) | Scaffold and implement FastAPI services with Pydantic and SQLAlchemy. |
+| [CodeFrameworkDiagnostician](agents/CodeFrameworkDiagnostician.agent.md) | Diagnose framework errors and validate local dependencies. |
+| [CodeFrontendAdvisor](agents/CodeFrontendAdvisor.agent.md) | Select frontend specialists for Next.js, Vite/React, or design systems. |
+| [CodeGeneralist](agents/CodeGeneralist.agent.md) | Implement, review, debug, or refactor when no specialist fits. |
+| [CodeGraphQLTRPCAgent](agents/CodeGraphQLTRPCAgent.agent.md) | Build GraphQL APIs and tRPC services. |
+| [CodeMockupWireframeSpecialist](agents/CodeMockupWireframeSpecialist.agent.md) | Produce direct, readable screen and flow mockups. |
+| [CodeNextJsSpecialist](agents/CodeNextJsSpecialist.agent.md) | Build and maintain Next.js applications and APIs. |
+| [CodeProductModernizationExpert](agents/CodeProductModernizationExpert.agent.md) | Assess product modernization opportunities and define target workflows. |
+| [CodeQualityGuardrailReviewer](agents/CodeQualityGuardrailReviewer.agent.md) | Independently review specifications, designs, and code for defects and risks. |
+| [CodeReactViteSpecialist](agents/CodeReactViteSpecialist.agent.md) | Build React and Vite frontends with TypeScript. |
+| [CodeRebuildEngineer](agents/CodeRebuildEngineer.agent.md) | Produce an evidence-linked As-Is System Reference or integrate supplied reports. |
+| [CodeSpringBootSpecialist](agents/CodeSpringBootSpecialist.agent.md) | Implement and debug Spring Boot services using existing project conventions. |
+| [ContextSummarizer](agents/ContextSummarizer.agent.md) | Create concise checkpoints for long or interrupted sessions. |
+| [DocsGovernanceAdvisor](agents/DocsGovernanceAdvisor.agent.md) | Select documentation and governance specialists for ADRs, GitHub, and research. |
+| [GovArchitectureRecordsExpert](agents/GovArchitectureRecordsExpert.agent.md) | Draft and maintain ADRs, RFCs, and architecture records. |
+| [GovDocumentationSuiteGenerator](agents/GovDocumentationSuiteGenerator.agent.md) | Write repository documentation and generate documentation suites. |
+| [GovGitWorkflowAgent](agents/GovGitWorkflowAgent.agent.md) | Manage authorized Git branches, commits, pushes, pull requests, and recovery. |
+| [GovGithubAgent](agents/GovGithubAgent.agent.md) | Plan agent capabilities and manage GitHub issue triage and filing. |
+| [GovOfficeDocumentGenerator](agents/GovOfficeDocumentGenerator.agent.md) | Create and validate PowerPoint and Visio deliverables. |
+| [GovWebResearchAgent](agents/GovWebResearchAgent.agent.md) | Research current web sources and return evidence-linked findings. |
+| [InfraCIDiagnostics](agents/InfraCIDiagnostics.agent.md) | Diagnose CI and GitHub Actions failures and propose minimal fixes. |
+| [InfraCloudDeploymentAgent](agents/InfraCloudDeploymentAgent.agent.md) | Design and implement cross-cloud deployment and provisioning. |
+| [InfraDevContainerSpecialist](agents/InfraDevContainerSpecialist.agent.md) | Configure development containers and workspace environments. |
+| [InfraDevOpsAdvisor](agents/InfraDevOpsAdvisor.agent.md) | Select DevOps specialists for infrastructure, deployment, and security work. |
+| [InfraIaCGenerator](agents/InfraIaCGenerator.agent.md) | Generate and validate Terraform, Pulumi, Bicep, and ARM infrastructure. |
+| [InfraKubernetesEngineer](agents/InfraKubernetesEngineer.agent.md) | Engineer Kubernetes manifests, networking, RBAC, and operations. |
+| [InfraLLMInferenceSpecialist](agents/InfraLLMInferenceSpecialist.agent.md) | Diagnose and configure local LLM inference and model capacity. |
+| [InfraMCPServerGenerator](agents/InfraMCPServerGenerator.agent.md) | Scaffold MCP servers and editor integrations. |
+| [InfraMonorepoManager](agents/InfraMonorepoManager.agent.md) | Coordinate package dependencies, versions, and affected builds. |
+| [InfraObservabilitySpecialist](agents/InfraObservabilitySpecialist.agent.md) | Set up logging, tracing, metrics, and monitoring. |
+| [InfraPerformanceProfiler](agents/InfraPerformanceProfiler.agent.md) | Profile Python and Node.js CPU or memory performance. |
+| [InfraReleaseManager](agents/InfraReleaseManager.agent.md) | Prepare releases, changelogs, and stage-specific publication plans. |
+| [InfraSecurityAuthAgent](agents/InfraSecurityAuthAgent.agent.md) | Design and diagnose authentication, authorization, RBAC, and secrets. |
+| [InfraTestInfrastructureGenerator](agents/InfraTestInfrastructureGenerator.agent.md) | Generate test suites, fixtures, mocks, coverage, and CI gates. |
+| [MultiLanguageBuilder](agents/MultiLanguageBuilder.agent.md) | Coordinate Python, Node.js, and TypeScript builds and dependencies. |
+| [Aro](agents/Aro.agent.md) | Orchestrate advisor-led specialist selection, task sequencing, and result synthesis. |
+| [UtilityAdvisor](agents/UtilityAdvisor.agent.md) | Select specialists for agent diagnostics, alternatives, and checkpoints. |
 
 </details>
+
+<br>
+
+For Aro’s routing sequence and model-selection details, see [the agent guide](docs/agents.md#aro-routing).
 
 ## Skills
 
 The extension also includes 10 reusable guides for common tasks, such as investigating a problem, improving an interface, preparing a release, or writing technical documents.
 
-**[View all 10 skills](docs/skills.md)**
+<details>
+<summary>Browse all 10 skills</summary>
+
+| Skill | Area | Use it for |
+| --- | --- | --- |
+| [agent-model-benchmark](skills/agent-model-benchmark/SKILL.md) | Evaluation | Explicit, paired, read-only model trials with fixed rubrics and verified usage telemetry. |
+| [container-display-operations](skills/container-display-operations/SKILL.md) | Operations | Containerized display scheduling, timezones, restart behavior, and host/device access boundaries. |
+| [frontend-experience-quality](skills/frontend-experience-quality/SKILL.md) | Frontend | Responsive interfaces, design-system consistency, and functional interaction checks. |
+| [go-contract-validation](skills/go-contract-validation/SKILL.md) | Backend | Go interfaces and provider adapters, especially cancellation, deadlines, idempotency, cleanup, and error propagation. |
+| [identity-failure-isolation](skills/identity-failure-isolation/SKILL.md) | Security | CI authentication and authorization diagnosis using sanitized OIDC, GitHub App, tenant, and secret-reference evidence. |
+| [markdown-mermaid-delivery](skills/markdown-mermaid-delivery/SKILL.md) | Documentation | Native Markdown and readable Mermaid diagrams with honest rendering status. |
+| [progressive-investigation](skills/progressive-investigation/SKILL.md) | Investigation | Scoped debugging and review from a concrete anchor, falsifiable hypothesis, and cheapest discriminating check. |
+| [release-contract-preflight](skills/release-contract-preflight/SKILL.md) | Release | Artifact provenance, overlays, storage ownership, rollback, and stage-specific authorization. |
+| [secure-development-bootstrap](skills/secure-development-bootstrap/SKILL.md) | Environment | Development setup across local hosts, SSH, containers, and Codespaces, including safe secret delivery. |
+| [specification-handoff](skills/specification-handoff/SKILL.md) | Planning | Turning approved specifications into portable implementation handoffs with requirements, acceptance criteria, and evidence. |
+
+</details>
+
+## Aro Model Learning (Experimental)
+
+Open the **Agent Roster** activity-bar view and select **Open Aro Learning** to see price-aware recommendations by specialist role and task type. A contextual UCB-style policy balances observed outcomes, conservative exploration, and model price. Aro records outcomes only after checking explicit acceptance criteria; ambiguous failures do not count against a model. Exploration is limited to low-risk simple or standard tasks. The scorecard is stored in this VS Code profile and contains no prompts or responses. Aro can request the recommended subagent model when the runtime accepts its exact ID; actual model resolution may not be observable. Rates use native metadata when available and a dated snapshot fallback otherwise. This updates recommendations, not model weights or training data.
 
 ## Privacy And Permissions
 
-The extension does not install extra tools or grant itself access. Helpers use the tools already available in your Copilot Chat, and some tasks may ask to use them. Review proposed changes and permission prompts before approving them.
+The extension contributes two Aro model-learning tools backed by this VS Code profile's global state. They store only requested model IDs, roles, task categories, fixed outcome codes, and worker names. They do not store prompts or responses. Other agent tasks use tools available in Copilot Chat. Review proposed changes and permission prompts before approving them.
 
 ## License
 
