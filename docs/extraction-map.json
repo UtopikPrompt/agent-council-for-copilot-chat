@@ -1,0 +1,135 @@
+[
+  {
+    "skill": "release-contract-preflight",
+    "source": "InfraReleaseManager",
+    "sections": [
+      "Release Contract Preflight"
+    ],
+    "agents": [
+      "InfraCloudDeploymentAgent",
+      "InfraIaCGenerator",
+      "InfraKubernetesEngineer",
+      "InfraReleaseManager"
+    ]
+  },
+  {
+    "skill": "identity-failure-isolation",
+    "source": "InfraCIDiagnostics",
+    "sections": [
+      "Identity Failure Isolation"
+    ],
+    "agents": [
+      "InfraCIDiagnostics",
+      "InfraSecurityAuthAgent"
+    ]
+  },
+  {
+    "skill": "secure-development-bootstrap",
+    "source": "InfraDevContainerSpecialist",
+    "sections": [
+      "Secure Development Bootstrap"
+    ],
+    "agents": [
+      "InfraDevContainerSpecialist",
+      "MultiLanguageBuilder"
+    ]
+  },
+  {
+    "skill": "frontend-experience-quality",
+    "source": "CodeNextJsSpecialist",
+    "sections": [
+      "Frontend Experience Quality"
+    ],
+    "agents": [
+      "CodeNextJsSpecialist",
+      "CodeReactViteSpecialist"
+    ]
+  },
+  {
+    "skill": "markdown-mermaid-delivery",
+    "source": "GovDocumentationSuiteGenerator",
+    "sections": [
+      "Markdown Formatting",
+      "Mermaid Diagrams"
+    ],
+    "agents": [
+      "GovArchitectureRecordsExpert",
+      "GovDocumentationSuiteGenerator",
+      "GovGithubAgent",
+      "InfraCIDiagnostics",
+      "InfraMCPServerGenerator",
+      "InfraMonorepoManager",
+      "InfraPerformanceProfiler",
+      "InfraReleaseManager",
+      "InfraTestInfrastructureGenerator"
+    ]
+  },
+  {
+    "skill": "go-contract-validation",
+    "source": "CodeGeneralist",
+    "sections": [
+      "Go Contract Validation"
+    ],
+    "agents": [
+      "CodeGeneralist",
+      "MultiLanguageBuilder"
+    ]
+  },
+  {
+    "skill": "container-display-operations",
+    "source": "CodeGeneralist",
+    "sections": [
+      "Container Display Operations"
+    ],
+    "agents": [
+      "CodeGeneralist",
+      "InfraDevContainerSpecialist"
+    ]
+  },
+  {
+    "skill": "specification-handoff",
+    "source": "GovDocumentationSuiteGenerator",
+    "sections": [
+      "Specification To Code Handoff"
+    ],
+    "agents": [
+      "GovArchitectureRecordsExpert",
+      "GovDocumentationSuiteGenerator"
+    ]
+  },
+  {
+    "skill": "progressive-investigation",
+    "source": "InfraReleaseManager",
+    "sections": [
+      "Efficiency — Progressive Deepening"
+    ],
+    "agents": [
+      "AgentOptimizer",
+      "Brainstorm",
+      "CodeDatabaseORMGenerator",
+      "CodeDesignSystemSpecialist",
+      "CodeExpressSpecialist",
+      "CodeFastApiSpecialist",
+      "CodeFrameworkDiagnostician",
+      "CodeGraphQLTRPCAgent",
+      "CodeNextJsSpecialist",
+      "CodeReactViteSpecialist",
+      "CodeRebuildEngineer",
+      "CodeSpringBootSpecialist",
+      "GovArchitectureRecordsExpert",
+      "GovDocumentationSuiteGenerator",
+      "InfraCloudDeploymentAgent",
+      "InfraDevContainerSpecialist",
+      "InfraIaCGenerator",
+      "InfraKubernetesEngineer",
+      "InfraMCPServerGenerator",
+      "InfraMonorepoManager",
+      "InfraObservabilitySpecialist",
+      "InfraPerformanceProfiler",
+      "InfraReleaseManager",
+      "InfraSecurityAuthAgent",
+      "InfraTestInfrastructureGenerator",
+      "MultiLanguageBuilder"
+    ]
+  }
+]

@@ -1,0 +1,218 @@
+{
+    "name": "agent-roster-for-copilot-chat",
+    "displayName": "Agent Roster for Copilot Chat",
+    "description": "A specialist agent roster and reusable workflow skills for GitHub Copilot Chat.",
+    "version": "0.1.0",
+    "publisher": "UtopikPrompt",
+    "license": "PolyForm-Noncommercial-1.0.0",
+    "engines": {
+        "vscode": "^1.111.0"
+    },
+    "categories": [
+        "AI",
+        "Chat"
+    ],
+    "keywords": [
+        "copilot",
+        "agents",
+        "skills",
+        "orchestrator"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/UtopikPrompt/agent-roster-for-copilot-chat.git"
+    },
+    "scripts": {
+        "test": "node --test",
+        "lint": "node scripts/validate.mjs",
+        "vscode:prepublish": "npm test && npm run lint",
+        "package": "vsce package"
+    },
+    "contributes": {
+        "chatAgents": [
+            {
+                "path": "./agents/AgentOptimizer.agent.md"
+            },
+            {
+                "path": "./agents/Brainstorm.agent.md"
+            },
+            {
+                "path": "./agents/BusinessKnowledgeAdvisor.agent.md"
+            },
+            {
+                "path": "./agents/BusinessKnowledgeExpert.agent.md"
+            },
+            {
+                "path": "./agents/CodeArchitectureExpert.agent.md"
+            },
+            {
+                "path": "./agents/CodeBackendAdvisor.agent.md"
+            },
+            {
+                "path": "./agents/CodeComfyUICustomNodeSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/CodeContextSchemaAuditor.agent.md"
+            },
+            {
+                "path": "./agents/CodeDatabaseORMGenerator.agent.md"
+            },
+            {
+                "path": "./agents/CodeDesignSystemSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/CodeDomainAdvisor.agent.md"
+            },
+            {
+                "path": "./agents/CodeExpressSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/CodeFastApiSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/CodeFrameworkDiagnostician.agent.md"
+            },
+            {
+                "path": "./agents/CodeFrontendAdvisor.agent.md"
+            },
+            {
+                "path": "./agents/CodeGeneralist.agent.md"
+            },
+            {
+                "path": "./agents/CodeGraphQLTRPCAgent.agent.md"
+            },
+            {
+                "path": "./agents/CodeMockupWireframeSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/CodeNextJsSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/CodeProductModernizationExpert.agent.md"
+            },
+            {
+                "path": "./agents/CodeQualityGuardrailReviewer.agent.md"
+            },
+            {
+                "path": "./agents/CodeReactViteSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/CodeRebuildEngineer.agent.md"
+            },
+            {
+                "path": "./agents/CodeSpringBootSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/ContextSummarizer.agent.md"
+            },
+            {
+                "path": "./agents/DocsGovernanceAdvisor.agent.md"
+            },
+            {
+                "path": "./agents/GovArchitectureRecordsExpert.agent.md"
+            },
+            {
+                "path": "./agents/GovDocumentationSuiteGenerator.agent.md"
+            },
+            {
+                "path": "./agents/GovGitWorkflowAgent.agent.md"
+            },
+            {
+                "path": "./agents/GovGithubAgent.agent.md"
+            },
+            {
+                "path": "./agents/GovOfficeDocumentGenerator.agent.md"
+            },
+            {
+                "path": "./agents/GovWebResearchAgent.agent.md"
+            },
+            {
+                "path": "./agents/InfraCIDiagnostics.agent.md"
+            },
+            {
+                "path": "./agents/InfraCloudDeploymentAgent.agent.md"
+            },
+            {
+                "path": "./agents/InfraDevContainerSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/InfraDevOpsAdvisor.agent.md"
+            },
+            {
+                "path": "./agents/InfraIaCGenerator.agent.md"
+            },
+            {
+                "path": "./agents/InfraKubernetesEngineer.agent.md"
+            },
+            {
+                "path": "./agents/InfraLLMInferenceSpecialist.agent.md"
+            },
+            {
+                "path": "./agents/InfraMCPServerGenerator.agent.md"
+            },
+            {
+                "path": "./agents/InfraMonorepoManager.agent.md"
+            },
+            {
+                "path": "./agents/InfraObservabilitySpecialist.agent.md"
+            },
+            {
+                "path": "./agents/InfraPerformanceProfiler.agent.md"
+            },
+            {
+                "path": "./agents/InfraReleaseManager.agent.md"
+            },
+            {
+                "path": "./agents/InfraSecurityAuthAgent.agent.md"
+            },
+            {
+                "path": "./agents/InfraTestInfrastructureGenerator.agent.md"
+            },
+            {
+                "path": "./agents/MultiLanguageBuilder.agent.md"
+            },
+            {
+                "path": "./agents/Orchestrator.agent.md"
+            },
+            {
+                "path": "./agents/UtilityAdvisor.agent.md"
+            }
+        ],
+        "chatSkills": [
+            {
+                "path": "./skills/agent-model-benchmark/SKILL.md"
+            },
+            {
+                "path": "./skills/container-display-operations/SKILL.md"
+            },
+            {
+                "path": "./skills/frontend-experience-quality/SKILL.md"
+            },
+            {
+                "path": "./skills/go-contract-validation/SKILL.md"
+            },
+            {
+                "path": "./skills/identity-failure-isolation/SKILL.md"
+            },
+            {
+                "path": "./skills/markdown-mermaid-delivery/SKILL.md"
+            },
+            {
+                "path": "./skills/progressive-investigation/SKILL.md"
+            },
+            {
+                "path": "./skills/release-contract-preflight/SKILL.md"
+            },
+            {
+                "path": "./skills/secure-development-bootstrap/SKILL.md"
+            },
+            {
+                "path": "./skills/specification-handoff/SKILL.md"
+            }
+        ]
+    },
+    "devDependencies": {
+        "@vscode/vsce": "^4.1.1",
+        "yaml": "^2.8.1"
+    }
+}
