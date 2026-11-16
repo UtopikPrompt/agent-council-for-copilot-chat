@@ -1,0 +1,49 @@
+# Migration And Maintenance
+
+## Content Selection
+
+The initial migration reads the user-supplied prompt directory without modifying it. It retains all 49 agent definitions, their routing hierarchy and tool allowlists, and the existing model benchmark skill. Aro retains its ordered model preferences and task-aware per-call selection; the six configured selection advisors retain their economical model preference. Per-call choices require exact runtime model IDs, otherwise Aro uses its configured preference or runtime default.
+
+The package excludes source Git metadata, Python caches, generated reports, historical improvement notes and client-editor settings. The separately maintained Microsoft Foundry skill bundle is not vendored: its dependencies, service assumptions and redistribution terms need an independent review. Install it separately when required.
+
+Useful roster descriptions become the [agent catalog](agents.md). Runtime routing remains embedded in Orchestrator rather than relying on that documentation.
+
+## Extraction Decisions
+
+The [extraction map](extraction-map.json) records the canonical source agent, original headings and every consuming agent for each of the nine extracted skills. The benchmark skill is retained separately, not counted as a new extraction. Shared procedures have one skill entry point; the relevant agent sections now link to that procedure and must load it before acting.
+
+Authorization, existing-edit protection, current-contract policy, final test/lint obligations and role restrictions remain inline. These are baseline constraints, not optional task skills. Each shared-skill consumer has one `Skill Loading` section covering all its workflow links; do not repeat that baseline at every link or put this prerequisite inside a skill. Validation requires exactly one loading policy per consumer. Skill loading never overrides a role's narrower permissions. Tool-free advisors do not need to load skills.
+
+The personal roster's former rule requiring every procedure to be embedded has intentionally changed for this extension: required shared workflows are packaged alongside the agents and registered through `chatSkills`. No runtime access to the original profile directory is required. Skill links are package-relative, not relative to the repository being assessed. Load skills by name from runtime-discovered locations or verified procedure content supplied by Aro; never guess installation paths or search personal profiles. If unavailable, return the skill name and failed lookup to Aro for discovery-based resolution and retry. Do not fabricate the procedure; block only dependent work and continue independent authorized analysis.
+
+Read-only analysis workers return complete findings and artifact content to Aro. They do not need edit tools to perform analysis or delegate persistence themselves. For requested artifacts, Aro consults DocsGovernanceAdvisor, invokes GovDocumentationSuiteGenerator with complete content and destination paths, and reads back saved artifacts before claiming persistence. An analyst's missing edit tools are not evidence that the writer route is unavailable.
+
+The Git worker's embedded PR procedure no longer requires separately installed PR skills; available skills can enrich it. Existing direct invocation of that worker is preserved. Model benchmarking is explicitly manual-only; it is separate from task-aware model selection and never changes model preferences.
+
+## Source Layout
+
+- `agents/`: packaged custom agent definitions.
+- `skills/<name>/SKILL.md`: packaged, independently discoverable workflows.
+- `docs/agents.md`: role catalog; `docs/skills.md`: shared workflow catalog.
+- `docs/extraction-map.json`: shared-workflow provenance and consumers.
+- `scripts/validate.mjs` and `test/`: structural lint and regression tests; not shipped in the VSIX.
+- `scripts/import-customizations.mjs`: initial bulk extraction utility, not a synchronization service. It requires an explicit source path and refuses to overwrite existing agents/skills. It was used for initial migration; subsequent portability fixes live in the checked-in assets. Do not rerun it over this maintained tree.
+
+When changing a role, synchronize its name/file, manifest contribution, Orchestrator allowlist and routing cues, advisor selection cues, catalog and affected tests. When changing a shared workflow, edit its skill once and verify all consumers. Do not add blanket tool permissions or fixed user paths.
+
+## Validation
+
+Run `npm test` and `npm run lint`, then `npm run package`. Inspect package contents with `npx vsce ls` when changing exclusions. There is deliberately no runtime extension-host entry point or VS Code proposed API dependency.
+
+Before distribution, test the actual VSIX in a clean VS Code profile with Copilot enabled:
+
+1. Install the VSIX, reload if prompted, and open a fresh chat.
+2. Verify Aro and the Git worker in the agent picker. Verify all 49 definitions and 10 skills in Chat: Open Customizations, including hidden worker agents.
+3. Give Aro a small read-only task and verify it invokes the indexed worker rather than merely describing a delegation.
+4. Invoke `/markdown-mermaid-delivery` with a small documentation request. Verify the skill content loads from the installed extension.
+5. Give a frontend worker a scoped request through Orchestrator and verify the linked quality skill loads without a client-profile search.
+6. Confirm the benchmark is not selected automatically and is available explicitly as `/agent-model-benchmark`.
+7. Repeat discovery, delegation and skill loading in an intended SSH/container window. Check missing-tool reporting without broadening permissions.
+8. In an unrelated repository without this package's `agents/` or `skills/` directories, request an As-Is System Reference. Verify the investigation skill loads from the installed extension, not a guessed target-relative path. Verify Aro obtains specialist findings, routes complete content through the advisor-selected documentation writer, and reads back the reference, coverage register and target repository's `docs/system-reference/README.md` resume point. This target README is separate from the extension repository's root README. In a separate controlled trial, supply an unavailable required skill location and verify named dependency recovery, no fabricated procedure, and continuation of independent authorized work. Record analysis and persistence status separately if writer invocation or tools fail.
+
+Static tests and VSIX packaging do not prove live model behavior, remote discovery, authentication or MCP availability. Record those smoke results separately. The project uses the [PolyForm Noncommercial License 1.0.0](../LICENSE); commercial use requires separate permission. Verify rights to all included content and publisher ownership before Marketplace publication. Local packaging does not grant those rights or publish the extension.
