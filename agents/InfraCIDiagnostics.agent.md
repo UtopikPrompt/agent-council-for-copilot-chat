@@ -64,7 +64,7 @@ Turn "CI is red" into "here is the exact failure cause and the concrete fix." Di
 
 ## Identity Failure Isolation
 
-When this workflow is relevant, read and follow the bundled [identity-failure-isolation skill](../skills/identity-failure-isolation/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [identity-failure-isolation skill](../skills/identity-failure-isolation/SKILL.md) before acting.
 
 ## Constraints
 - No automatic permission expansion, reauthentication, token regeneration or secret rotation. Never request raw tokens; diagnosis does not authorize remote mutations.
@@ -86,4 +86,8 @@ Do not produce capability-filing fields or create issues as a side effect of dia
 
 ## Markdown Mermaid Delivery
 
-When this workflow is relevant, read and follow the bundled [markdown-mermaid-delivery skill](../skills/markdown-mermaid-delivery/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [markdown-mermaid-delivery skill](../skills/markdown-mermaid-delivery/SKILL.md) before acting.
+
+## Skill Loading
+
+Skill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.

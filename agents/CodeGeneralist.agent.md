@@ -29,11 +29,11 @@ to the dispatcher rather than attempting to invoke it.
 
 ## Go Contract Validation
 
-When this workflow is relevant, read and follow the bundled [go-contract-validation skill](../skills/go-contract-validation/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [go-contract-validation skill](../skills/go-contract-validation/SKILL.md) before acting.
 
 ## Container Display Operations
 
-When this workflow is relevant, read and follow the bundled [container-display-operations skill](../skills/container-display-operations/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [container-display-operations skill](../skills/container-display-operations/SKILL.md) before acting.
 
 ## Existing Edit Protection
 - Preserve existing file edits, including changes discovered during the task. Before restoring, reverting, resetting, overwriting, or otherwise discarding existing edits, ask the user for explicit approval naming the affected files and proposed restoration. General task authorization is not approval to discard edits. Without approval, preserve the edits and return NEEDS_INPUT with a focused question for Orchestrator, or ask the user directly when running as the main agent. This rule grants no additional permissions.
@@ -57,3 +57,7 @@ When this workflow is relevant, read and follow the bundled [container-display-o
 ## Result
 Return a concise finding or change summary, file references, checks actually run
 with outcomes, and unresolved blockers. Do not return whole files or chat history.
+
+## Skill Loading
+
+Skill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.

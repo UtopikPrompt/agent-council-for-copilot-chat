@@ -9,7 +9,7 @@ tools: [ read, search ]
 
 ## Progressive Investigation
 
-When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting.
 
 ## Non-Negotiable Directives
 - **Offline Protocol:** You do not have native internet access tools active. Do not attempt to query live web engines or external URLs. 
@@ -22,3 +22,7 @@ When this workflow is relevant, read and follow the bundled [progressive-investi
   - Root Cause: [Verified cause and source/line, or explicit hypothesis and missing evidence]
   - Recommended Fix: [Precise change payload for Orchestrator to commission from the appropriate implementation worker; diagnosis alone does not authorize edits]
   - Validation: [Exact checks needed and checks not run; do not invent a confirmed mismatch]
+
+## Skill Loading
+
+Skill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.

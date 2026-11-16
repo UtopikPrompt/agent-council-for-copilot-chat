@@ -122,7 +122,6 @@ await mkdir(path.join(root, 'agents'), { recursive: true });
 for (const [name, original] of originals) {
     const frontmatter = /^---\n([\s\S]*?)\n---\n/.exec(original.text);
     const document = parseDocument(frontmatter[1]);
-    document.delete('model');
     let body = original.body;
     const indexed = sections(body);
     const replacements = [];
@@ -133,7 +132,7 @@ for (const [name, original] of originals) {
         for (const [headingIndex, heading] of matches.entries()) {
             const section = indexed.get(heading);
             const replacement = headingIndex === 0
-                ? `## ${workflow.name.split('-').map(word => word[0].toUpperCase() + word.slice(1)).join(' ')}\n\nWhen this workflow is relevant, read and follow the bundled [${workflow.name} skill](../skills/${workflow.name}/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.\n\n`
+                ? `## ${workflow.name.split('-').map(word => word[0].toUpperCase() + word.slice(1)).join(' ')}\n\nWhen this workflow is relevant, read and follow the bundled [${workflow.name} skill](../skills/${workflow.name}/SKILL.md) before acting.\n\n`
                 : '';
             replacements.push({ ...section, replacement });
         }
@@ -141,12 +140,8 @@ for (const [name, original] of originals) {
     for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
         body = body.slice(0, replacement.start) + replacement.replacement + body.slice(replacement.end);
     }
-    if (name === 'Orchestrator') {
-        const modelSection = sections(body).get('Model Selection');
-        assert.ok(modelSection, 'Missing model selection section');
-        body = body.slice(0, modelSection.start)
-            + '## Model Selection\n\nUse the user-selected model or runtime default. Use per-call model selection only when explicitly requested and the runtime exposes the exact model ID. Never infer the resolved model or cost from a display label. Preserve acceptance checks and competent human validation for high-consequence decisions. Benchmarking is a separate, explicitly requested read-only workflow.\n\n'
-            + body.slice(modelSection.end);
+    if (replacements.length) {
+        body = `${body.trim()}\n\n## Skill Loading\n\nSkill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.\n`;
     }
     await writeFile(path.join(root, 'agents', original.filename), `---\n${document.toString().trim()}\n---\n\n${body.trim()}\n`, { flag: 'wx' });
 }

@@ -32,11 +32,11 @@ project-specific architecture on other repositories.
 
 ## Progressive Investigation
 
-When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting.
 
 ## Specification Handoff
 
-When this workflow is relevant, read and follow the bundled [specification-handoff skill](../skills/specification-handoff/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [specification-handoff skill](../skills/specification-handoff/SKILL.md) before acting.
 
 ## Delivery
 - Report the record path, current status, evidence of decision authority, proposed or authorized edits, and unresolved questions.
@@ -45,4 +45,8 @@ When this workflow is relevant, read and follow the bundled [specification-hando
 
 ## Markdown Mermaid Delivery
 
-When this workflow is relevant, read and follow the bundled [markdown-mermaid-delivery skill](../skills/markdown-mermaid-delivery/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [markdown-mermaid-delivery skill](../skills/markdown-mermaid-delivery/SKILL.md) before acting.
+
+## Skill Loading
+
+Skill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.

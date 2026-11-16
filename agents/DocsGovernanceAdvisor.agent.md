@@ -1,9 +1,10 @@
 ---
 name: "DocsGovernanceAdvisor"
-description: "Optional documentation/governance specialist-selection advisor for
-  ambiguous ADR, documentation, GitHub, and web research workflows. Returns a
-  routing decision only."
+description: "Documentation/governance specialist-selection advisor for ADR,
+  documentation, GitHub, and web research workflows. Returns a routing decision
+  only."
 argument-hint: "Goal, audience, constraints, and documentation/governance candidates."
+model: "Claude Haiku 5.5"
 user-invocable: false
 tools: []
 agents: []

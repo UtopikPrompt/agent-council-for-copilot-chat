@@ -29,6 +29,42 @@ test('validates the complete council and all extracted workflow consumers', asyn
     assert.deepEqual(await validate(), { agents: 49, skills: 10 });
 });
 
+test('Aro selects delegated models by task complexity when exact IDs are available', async () => {
+    const { metadata, body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    assert.deepEqual(metadata.model, ['GPT-6 Luna', 'Claude Haiku 5.5']);
+    const modelSelection = body.split('## Model Selection\n')[1]?.split(/^## /m)[0];
+    assert.ok(modelSelection, 'Missing model selection guidance');
+    assert.match(modelSelection, /Claude Haiku 5\.5 \(copilot\).*clear, bounded, low-risk/s);
+    assert.match(modelSelection, /Claude Sonnet 5\.5 \(copilot\).*complex, multi-source/s);
+    assert.match(modelSelection, /If per-call selection is unsupported or rejected, use the configured model or\s+runtime default/);
+    assert.match(modelSelection, /do not choose premium solely by domain name/);
+    assert.match(modelSelection, /claim\s+resolution only when runtime telemetry confirms it/);
+});
+
+test('preserves economical model preferences on configured selection advisors', async () => {
+    const advisors = ['CodeBackendAdvisor', 'CodeDomainAdvisor', 'CodeFrontendAdvisor', 'DocsGovernanceAdvisor', 'InfraDevOpsAdvisor', 'UtilityAdvisor'];
+    for (const name of advisors) {
+        const { metadata } = parseCustomization(await readFile(path.join(root, `agents/${name}.agent.md`), 'utf8'), name);
+        assert.equal(metadata.model, 'Claude Haiku 5.5', `${name}: expected economical advisor model preference`);
+    }
+});
+
+test('Aro resolves procedure gaps and owns persistence for read-only assessment workers', async () => {
+    const { body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    assert.match(body, /runtime-discovered locations, never paths guessed from\s+the target repository/);
+    assert.match(body, /retry the affected scope/);
+    assert.match(body, /continuing independent authorized work/);
+    assert.match(body, /consult DocsGovernanceAdvisor and invoke GovDocumentationSuiteGenerator/);
+    assert.match(body, /verify saved paths by read-back/);
+    assert.match(body, /only after the writer route fails or lacks its required tools/);
+    const worker = parseCustomization(await readFile(path.join(root, 'agents/CodeRebuildEngineer.agent.md'), 'utf8'), 'CodeRebuildEngineer');
+    assert.deepEqual(worker.metadata.tools, ['read', 'search']);
+    assert.deepEqual(worker.metadata.agents, []);
+    assert.match(worker.body, /Return complete findings, artifact content and\s+proposed paths to Aro/);
+    assert.match(worker.body, /Missing edit tools do not block read-only analysis/);
+    assert.match(worker.body, /return its skill name and failed lookup to Aro/);
+});
+
 async function fixture(context) {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'agent-roster-'));
     context.after(() => rm(directory, { recursive: true, force: true }));
@@ -37,13 +73,13 @@ async function fixture(context) {
     }
     const manifest = {
         contributes: {
-            chatAgents: [{ path: './agents/Orchestrator.agent.md' }, { path: './agents/ExampleAdvisor.agent.md' }],
+            chatAgents: [{ path: './agents/Aro.agent.md' }, { path: './agents/ExampleAdvisor.agent.md' }],
             chatSkills: [{ path: './skills/sample/SKILL.md' }]
         }
     };
     await writeFile(path.join(directory, 'package.json'), JSON.stringify(manifest));
     await writeFile(path.join(directory, 'docs/extraction-map.json'), '[]');
-    await writeFile(path.join(directory, 'agents/Orchestrator.agent.md'), '---\nname: Orchestrator\ndescription: Dispatch\ntools: [agent]\nagents: [ExampleAdvisor]\n---\nRoute to ExampleAdvisor.\n');
+    await writeFile(path.join(directory, 'agents/Aro.agent.md'), '---\nname: Aro\ndescription: Dispatch\ntools: [agent]\nagents: [ExampleAdvisor]\n---\nRoute to ExampleAdvisor.\n');
     await writeFile(path.join(directory, 'agents/ExampleAdvisor.agent.md'), '---\nname: ExampleAdvisor\ndescription: Select\ntools: []\n---\nChoose a worker.\n');
     await writeFile(path.join(directory, 'skills/sample/SKILL.md'), '---\nname: sample\ndescription: Use for tests\n---\nRun a test.\n');
     return directory;
@@ -57,6 +93,33 @@ test('rejects broken bundled skill links', async context => {
     const directory = await fixture(context);
     await writeFile(path.join(directory, 'agents/ExampleAdvisor.agent.md'), '---\nname: ExampleAdvisor\ndescription: Select\ntools: []\n---\nRead [missing](../skills/missing/SKILL.md).\n');
     await assert.rejects(validate(directory), /ENOENT/);
+});
+
+test('requires agent-level discovery and recovery guidance for extracted skills', async context => {
+    const directory = await fixture(context);
+    await writeFile(path.join(directory, 'docs/extraction-map.json'), JSON.stringify([
+        { skill: 'sample', agents: ['Aro'], sections: [] }
+    ]));
+    const filename = path.join(directory, 'agents/Aro.agent.md');
+    const original = await readFile(filename, 'utf8');
+    const reference = 'Read [sample](../skills/sample/SKILL.md).';
+    const guidance = [
+        'The link is package-relative, not target-workspace-relative.',
+        'Load by skill name from the runtime-discovered location.',
+        'If unavailable, return the skill name and failed lookup to Aro.'
+    ];
+    for (const [index, error] of [
+        /ambiguous skill path base/,
+        /missing skill discovery guidance/,
+        /missing procedure recovery handoff/
+    ].entries()) {
+        await writeFile(filename, `${original}\n${reference}\n\n## Skill Loading\n${guidance.filter((sentence, position) => position !== index).join(' ')}\n`);
+        await assert.rejects(validate(directory), error);
+    }
+    await writeFile(filename, `${original}\n${reference}\n\n## Skill Loading\n${guidance.join(' ')}\n`);
+    assert.deepEqual(await validate(directory), { agents: 2, skills: 1 });
+    await writeFile(filename, `${original}\n${reference}\n\n## Skill Loading\n${guidance.join(' ')}\n\n## Skill Loading\nRepeated policy.\n`);
+    await assert.rejects(validate(directory), /exactly one skill-loading policy/);
 });
 
 test('rejects role tool escalation', async context => {
@@ -79,7 +142,7 @@ test('rejects skill directory and frontmatter name mismatches', async context =>
 
 test('rejects a stale dispatcher allowlist', async context => {
     const directory = await fixture(context);
-    await writeFile(path.join(directory, 'agents/Orchestrator.agent.md'), '---\nname: Orchestrator\ndescription: Dispatch\ntools: [agent]\nagents: []\n---\nExampleAdvisor.\n');
+    await writeFile(path.join(directory, 'agents/Aro.agent.md'), '---\nname: Aro\ndescription: Dispatch\ntools: [agent]\nagents: []\n---\nExampleAdvisor.\n');
     await assert.rejects(validate(directory), /allowlist/);
 });
 
@@ -97,4 +160,21 @@ test('benchmarking is explicit-only and package has no runtime entry point', asy
     assert.equal(manifest.browser, undefined);
     assert.equal(manifest.enabledApiProposals, undefined);
     assert.equal(manifest.dependencies, undefined);
+});
+
+test('Aro consults the required domain advisor before every specialist dispatch', async () => {
+    const { body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    assert.match(body, /Before every specialist dispatch, invoke the relevant advisor/);
+    assert.match(body, /consult\s+the relevant advisor for each distinct specialist selection/);
+    assert.match(body, /\| Selection Cue \| Worker \| Required Advisor \|/);
+    assert.doesNotMatch(body, /Optional Advisor/);
+});
+
+test('Aro surfaces evidence-based roster gaps without automatic filing', async () => {
+    const { body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    assert.match(body, /## Roster Gap Signals/);
+    assert.match(body, /current-conversation evidence/);
+    assert.match(body, /Never create an agent, skill, issue, or project automatically/);
+    assert.match(body, /consult DocsGovernanceAdvisor and dispatch GovGithubAgent/);
+    assert.match(body, /if filing tools or a verified destination\s+are unavailable, provide the draft/);
 });

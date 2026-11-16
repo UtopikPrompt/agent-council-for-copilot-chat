@@ -10,14 +10,14 @@ tools: [ read, search, edit, todo ]
 
 ## Progressive Investigation
 
-When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting.
 
 ## Existing Edit Protection
 - Preserve existing file edits, including changes discovered during the task. Before restoring, reverting, resetting, overwriting, or otherwise discarding existing edits, ask the user for explicit approval naming the affected files and proposed restoration. General task authorization is not approval to discard edits. Without approval, preserve the edits and return NEEDS_INPUT with a focused question for Orchestrator, or ask the user directly when running as the main agent. This rule grants no additional permissions.
 
 ## Specification Handoff
 
-When this workflow is relevant, read and follow the bundled [specification-handoff skill](../skills/specification-handoff/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [specification-handoff skill](../skills/specification-handoff/SKILL.md) before acting.
 
 ## Portable Rebuild Package Export
 - When persisting a rebuild analysis, preserve the complete specification rather
@@ -261,7 +261,7 @@ Description of endpoint
 
 ## Markdown Mermaid Delivery
 
-When this workflow is relevant, read and follow the bundled [markdown-mermaid-delivery skill](../skills/markdown-mermaid-delivery/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [markdown-mermaid-delivery skill](../skills/markdown-mermaid-delivery/SKILL.md) before acting.
 
 ## Output Contract
 ```yaml
@@ -277,3 +277,7 @@ Documentation:
   Validation: [actual checks, unavailable checks and unresolved links]
   ApprovalStatus: [proposed, accepted or unknown with supplied evidence]
 ```
+
+## Skill Loading
+
+Skill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.

@@ -5,6 +5,7 @@
             "name": "Agent Roster: Extension Development Host",
             "type": "extensionHost",
             "request": "launch",
+            "preLaunchTask": "npm: vscode:prepublish",
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}"
             ]

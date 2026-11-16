@@ -176,4 +176,8 @@ API:
 
 ## Progressive Investigation
 
-When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting.
+
+## Skill Loading
+
+Skill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.

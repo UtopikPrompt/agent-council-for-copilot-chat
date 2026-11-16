@@ -104,7 +104,12 @@ missing-input requests to Orchestrator; never invoke workers or implement code.
   review checks, approval status, decision register, unresolved items and resume task.
   Changed inputs invalidate affected downstream reports/reviews; never reuse stale PASS.
 - Requested persistence goes to GovDocumentationSuiteGenerator; verify actual saved
-  paths before claiming completion. Do not resume phase-numbered checkpoints or map
+  paths before claiming completion. Return complete findings, artifact content and
+  proposed paths to Aro for its advisor-selected writer handoff; do not invoke the
+  writer yourself. Missing edit tools do not block read-only analysis. If a required
+  procedure is unavailable, return its skill name and failed lookup to Aro for
+  resolution, preserving supported findings and independent authorized work.
+  Do not resume phase-numbered checkpoints or map
   old phase workflows. Treat any supplied old artifact only as unverified source evidence;
   rebuild the canonical report set and do not retain its filename or phase aliases.
 - Emit only workflow_version professional-report-v1 with descriptive, unnumbered
@@ -228,7 +233,7 @@ missing-input requests to Orchestrator; never invoke workers or implement code.
 
 ## Progressive Investigation
 
-When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting.
 
 ## Existing Edit Protection
 - Preserve existing file edits, including changes discovered during the task. Before
@@ -269,3 +274,7 @@ When this workflow is relevant, read and follow the bundled [progressive-investi
   behavioral summaries, contracts, acceptance scenarios, decisions and exact gaps.
   Do not claim tests, parsers or acceptance checks ran without evidence. Return the
   exact resume task to Orchestrator; do not implement, publish, migrate or delegate.
+
+## Skill Loading
+
+Skill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.

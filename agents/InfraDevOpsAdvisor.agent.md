@@ -1,10 +1,10 @@
 ---
 name: "InfraDevOpsAdvisor"
-description: "Optional infrastructure/DevOps selection advisor when local LLM
-  inference, deployment, IaC, security, Kubernetes, tooling, or CI ownership is
-  ambiguous. Returns a decision only."
+description: "Infrastructure/DevOps advisor for local LLM inference, deployment,
+  IaC, security, Kubernetes, tooling, and CI selection. Returns a decision only."
 argument-hint: "Goal, environment, constraints, and Infra/DevOps routing rows
   supplied by Orchestrator."
+model: "Claude Haiku 5.5"
 user-invocable: false
 tools: []
 agents: []

@@ -5,7 +5,7 @@ description: "Read-only internet research using SearXNG: current documentation,
   findings, not implementation."
 argument-hint: "Research question, relevant versions, date range, constraints,
   and evidence needed."
-user-invocable: true
+user-invocable: false
 tools: [ read, search, 'io.github.ihor-sokoliuk/mcp-searxng/*' ]
 agents: []
 ---

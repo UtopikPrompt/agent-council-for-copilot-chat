@@ -1,6 +1,6 @@
 ---
 name: "BusinessKnowledgeAdvisor"
-description: "Optional business-knowledge domain advisor for ambiguous business
+description: "Business-knowledge domain advisor for selecting specialists for
   needs, requirements, business rules, process analysis, enterprise knowledge
   maps and evidence-grounded impact questions. Returns a selection decision
   only."

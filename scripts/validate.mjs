@@ -64,11 +64,14 @@ export async function validate(base = root) {
                 assert.equal(path.basename(filename), `${metadata.name}.agent.md`);
                 assert.ok(Array.isArray(metadata.tools), `${entry.path}: missing tool restrictions`);
                 if (metadata.name.endsWith('Advisor')) assert.deepEqual(metadata.tools, [], `${metadata.name}: advisor must be tool-free`);
-                if (metadata.name !== 'Orchestrator') {
+                if (metadata.name !== 'Aro') {
                     assert.ok(!metadata.tools.some(tool => /^(agent|runSubagent)(\/|$)/.test(tool)), `${metadata.name}: nested delegation`);
                     assert.ok(!metadata.agents || metadata.agents.length === 0, `${metadata.name}: worker allowlist`);
                 }
-                assert.ok(!metadata.model, `${metadata.name}: bundled agent must use the user's selected model`);
+                if (metadata.model !== undefined) {
+                    const models = Array.isArray(metadata.model) ? metadata.model : [metadata.model];
+                    assert.ok(models.length > 0 && models.every(model => typeof model === 'string' && model.trim()), `${metadata.name}: invalid model preference`);
+                }
                 agents.push({ metadata, body });
             } else {
                 assert.equal(path.basename(filename), 'SKILL.md');
@@ -87,8 +90,8 @@ export async function validate(base = root) {
     for (const filename of allFiles.filter(filename => filename.endsWith('.agent.md') || path.basename(filename) === 'SKILL.md')) {
         assert.ok(contributed.has(filename), `Unregistered customization: ${path.relative(base, filename)}`);
     }
-    const dispatcher = agents.find(agent => agent.metadata.name === 'Orchestrator');
-    assert.ok(dispatcher, 'Missing Orchestrator');
+    const dispatcher = agents.find(agent => agent.metadata.name === 'Aro');
+    assert.ok(dispatcher, 'Missing Aro');
     const expected = agents.filter(agent => agent !== dispatcher).map(agent => agent.metadata.name).sort();
     assert.deepEqual([...dispatcher.metadata.agents].sort(), expected, 'Dispatcher allowlist must match roster');
     for (const name of expected) assert.ok(dispatcher.body.includes(name), `Missing routing cue: ${name}`);
@@ -100,6 +103,11 @@ export async function validate(base = root) {
             const agent = agents.find(agent => agent.metadata.name === name);
             assert.ok(agent, `Unknown extraction consumer: ${name}`);
             assert.ok(agent.body.includes(`](../skills/${extraction.skill}/SKILL.md)`), `${name}: missing skill link`);
+            assert.equal([...agent.body.matchAll(/^## Skill Loading\r?$/gm)].length, 1, `${name}: expected exactly one skill-loading policy`);
+            const loading = agent.body.split(/^## Skill Loading\r?$/m)[1].split(/^## /m)[0];
+            assert.match(loading, /not target-workspace-relative/, `${name}: ambiguous skill path base`);
+            assert.match(loading, /runtime-discovered location/, `${name}: missing skill discovery guidance`);
+            assert.match(loading, /return the skill name and failed lookup to Aro/, `${name}: missing procedure recovery handoff`);
             for (const heading of extraction.sections) {
                 const section = agent.body.split(`## ${heading}\n`)[1]?.split(/^## /m)[0];
                 if (section) {

@@ -1,82 +1,114 @@
 # Agent Roster for Copilot Chat
 
-A VS Code extension providing **49 specialized agents** and **10 reusable skills** for GitHub Copilot Chat. Select **Orchestrator**, describe the goal and target, and let it select the appropriate worker.
+**Tell Copilot what you need. Aro finds the right specialist.**
 
-The extension contributes Markdown customizations directly through VS Code's `chatAgents` and `chatSkills` contribution points. It has no activation code, runtime dependencies, telemetry or automatic setup actions. It does not copy files into your repositories or personal prompt folder.
+This extension adds 49 focused helpers to GitHub Copilot Chat. They can help explain a project, solve coding problems, plan changes, improve documentation, and more. Aro is the starting point: describe your task in your own words, and it brings in a helper suited to the work.
 
-## Install
+## Availability
 
-Requires VS Code **1.111 or newer**, a current GitHub Copilot Chat installation with agent support, and Copilot access. The extension does not include models, subscriptions, MCP servers or credentials.
+This extension is not currently listed in the VS Code Marketplace, so there is no Store install link yet.
 
-Build locally with Node.js 22.12 or newer and npm:
+## Get Started
 
-```sh
-npm ci
-npm run package
-```
+You’ll need VS Code 1.111 or newer and access to GitHub Copilot Chat with agent support.
 
-Run **Extensions: Install from VSIX...** and select `agent-roster-for-copilot-chat-0.1.0.vsix`, then start a fresh chat. Alternatively:
-
-```sh
-code --install-extension agent-roster-for-copilot-chat-0.1.0.vsix
-```
-
-No Marketplace publication is needed for local installation. The publisher field is package metadata, not proof of a registered or authenticated Marketplace publisher.
-
-## License
-
-Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use, modification and redistribution are permitted under its terms. Commercial use requires separate permission from the rights holder. The license expressly permits specified charitable, educational, research, public-service and government uses; see the full terms for scope.
-
-This is a source-available license, not an open-source license. Third-party dependencies retain their own licenses.
-
-## Use The Roster
-
-Select **Orchestrator** in the agent picker and provide a short request, for example:
+Once the extension is available in your VS Code, open Copilot Chat, choose **Aro**, and describe what you need. For example:
 
 ```text
-Fix the failing request-validation test in src/api; preserve the current stack.
+I’m new to this project. Explain what it does and where I should start.
 ```
 
-Orchestrator is the only dispatcher. Its seven tool-free advisors resolve ambiguous selection; the 41 workers own implementation, diagnosis, business knowledge, architecture, infrastructure, governance and supporting tasks. Workers do not delegate. Most workers are hidden from the picker but remain available as subagents. The source Git workflow agent remains directly selectable.
+Or:
 
-Keep the goal, target and desired output concise. The selected worker owns its procedures. Reviews and diagnosis do not authorize repairs, and release preparation does not authorize publication or rollout. Agents use your selected/default model rather than pinned personal model names.
+```text
+Please make this document easier for a non-technical reader to understand.
+```
 
-See the [complete agent catalog](docs/agents.md) for all roles.
+You can ask Aro to make a plan before changing anything. Review suggestions and approve changes through the usual Copilot prompts.
+
+## Agents
+
+The roster includes 49 specialists. Start with Aro: describe what you need, and Aro selects a relevant specialist.
+
+**[View all 49 agents](docs/agents.md)**
+
+- Understand a project or a piece of code
+- Find and fix software problems
+- Plan or review a change
+- Improve documentation
+- Get help with architecture, business processes, and infrastructure
+
+<details>
+<summary>How Aro routes a request</summary>
+
+Aro consults the relevant advisor before every specialist call, even when the right specialist seems obvious.
+
+```mermaid
+sequenceDiagram
+	actor U as You
+	participant Aro
+	participant Advisor as Relevant advisor
+	participant W1 as Specialist A
+	participant W2 as Specialist B
+
+	U->>Aro: Describe a task
+	Aro->>Aro: Scope the request and split composite work into subtasks
+
+	alt One specialist
+		Aro->>Advisor: Send task and matching candidate routes
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>Aro: Validate recommendation against candidates and allowlist
+		Aro->>Aro: Choose a model for this call
+		Aro->>W1: Send scoped task and model when supported
+		W1-->>Aro: Return result and evidence
+	else Independent subtasks with disjoint write sets
+		par Subtask A
+			Aro->>Advisor: Consult for this specialist call
+			Advisor-->>Aro: Recommend one indexed worker
+			Aro->>Aro: Validate recommendation and choose a model for this call
+			Aro->>W1: Send scoped subtask and model when supported
+			W1-->>Aro: Return result and evidence
+		and Subtask B
+			Aro->>Advisor: Consult for this specialist call
+			Advisor-->>Aro: Recommend one indexed worker
+			Aro->>Aro: Validate recommendation and choose a model for this call
+			Aro->>W2: Send scoped subtask and model when supported
+			W2-->>Aro: Return result and evidence
+		end
+	else Dependent or overlapping subtasks
+		Aro->>Advisor: Consult for prerequisite specialist call
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>Aro: Validate recommendation and choose a model for this call
+		Aro->>W1: Send prerequisite subtask and model when supported
+		W1-->>Aro: Return result and evidence
+		Aro->>Advisor: Consult for dependent call with required delta
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>Aro: Validate recommendation and choose a model for this call
+		Aro->>W2: Send dependent subtask and model when supported
+		W2-->>Aro: Return result and evidence
+	end
+
+	Aro->>Aro: Validate and reconcile results
+	Aro-->>U: Return outcome, checks, and limitations
+
+```
+
+If an advisor cannot recommend a valid worker, Aro corrects the candidate scope or asks for clarification; it does not skip advisor selection. Model choice is per call: use Claude Haiku 5.5 for clear, bounded, low-risk work and Claude Sonnet 5.5 for materially complex synthesis or design only when exact per-call IDs are available. If model selection is unsupported or rejected, use the configured model or runtime default and report the limitation. Report requested and resolved models separately; claim resolution only when runtime telemetry confirms it.
+
+</details>
 
 ## Skills
 
-Type `/` in chat to select a skill, or describe a matching task so Copilot can load it. Discovery does not guarantee selection; agent definitions explicitly link required shared workflows.
+The extension also includes 10 reusable guides for common tasks, such as investigating a problem, improving an interface, preparing a release, or writing technical documents.
 
-| Skill | Reusable Procedure |
-| --- | --- |
-| [progressive-investigation](skills/progressive-investigation/SKILL.md) | Concrete anchor, hypothesis, cheapest check and scoped validation |
-| [release-contract-preflight](skills/release-contract-preflight/SKILL.md) | Artifact identity, provenance, overlays, storage, rollback and stage gates |
-| [identity-failure-isolation](skills/identity-failure-isolation/SKILL.md) | OIDC, GitHub Apps, permissions, tenant mapping and Secret references |
-| [secure-development-bootstrap](skills/secure-development-bootstrap/SKILL.md) | Safe host, SSH, container and polyglot environment setup |
-| [frontend-experience-quality](skills/frontend-experience-quality/SKILL.md) | Responsive, functional interfaces consistent with the existing design system |
-| [go-contract-validation](skills/go-contract-validation/SKILL.md) | Go interfaces, provider boundaries, lifecycle, cancellation and cleanup |
-| [container-display-operations](skills/container-display-operations/SKILL.md) | Display scheduling, timezones and host/device permission boundaries |
-| [specification-handoff](skills/specification-handoff/SKILL.md) | Approved requirements, acceptance criteria, evidence and implementation kickoff |
-| [markdown-mermaid-delivery](skills/markdown-mermaid-delivery/SKILL.md) | Native Markdown, readable diagrams and explicit rendering status |
-| [agent-model-benchmark](skills/agent-model-benchmark/SKILL.md) | Explicitly requested, paired read-only model trials with verified telemetry |
+**[View all 10 skills](docs/skills.md)**
 
-Benchmarking is manual-only (`/agent-model-benchmark`), since it invokes extra model trials and may incur usage. Skills cannot expand an agent's tools or the user's authorization.
+## Privacy And Permissions
 
-## Availability And Migration
+The extension does not install extra tools or grant itself access. Helpers use the tools already available in your Copilot Chat, and some tasks may ask to use them. Review proposed changes and permission prompts before approving them.
 
-- Your existing personal customizations remain untouched. If names collide, use **Chat: Open Customizations** to inspect their source and disable an unwanted copy yourself. This extension never deletes or renames personal files.
-- GitHub workers need authenticated GitHub tooling or the documented GitHub CLI path. The web research worker needs the configured SearXNG MCP tools. Browser, cloud, container and other domain tools must be available in the active session; missing tools are reported rather than installed automatically.
-- For Remote SSH or containers, ensure this extension is enabled in the target VS Code window. Check both Agents and Skills in **Chat: Open Customizations** and verify a linked skill can be read in a fresh chat. No personal-directory junctions or workflow searches are required. Live remote discovery and tool access still require a smoke test in that environment.
-- Agents and skills are instructions, not a security sandbox. Review tool approvals and the content before use. Do not grant blanket permissions to make a task proceed.
+## License
 
-## Development
+This project is available under the [PolyForm Noncommercial License 1.0.0](LICENSE). It permits noncommercial use; commercial use requires separate permission from the rights holder. See the license for full terms.
 
-```sh
-npm test
-npm run lint
-npm run package
-```
-
-Packaging runs tests and customization lint automatically. The lint checks YAML, registration, relative links, names, skill metadata, dispatcher membership, tool-free advisors, nondelegating workers and the extraction map.
-
-See [migration and maintenance](docs/maintenance.md) for provenance, extraction decisions and installation smoke checks. The editable source of truth is now `agents/` and `skills/`, not the original personal folder.
+For project maintenance and contributor information, see [maintenance](docs/maintenance.md).

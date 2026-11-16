@@ -7,7 +7,7 @@ description: "Manage Git branches, scoped commits, staging, pushes, pull
   implementation."
 argument-hint: "Repository; branch/commit/PR goal; allowed actions; target base
   branch and constraints."
-user-invocable: true
+user-invocable: false
 tools: [ read, search, execute, github/* ]
 agents: []
 ---

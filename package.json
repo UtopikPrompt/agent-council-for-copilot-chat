@@ -8,6 +8,9 @@
     "engines": {
         "vscode": "^1.111.0"
     },
+    "extensionDependencies": [
+        "GitHub.copilot-chat"
+    ],
     "categories": [
         "AI",
         "Chat"
@@ -172,7 +175,7 @@
                 "path": "./agents/MultiLanguageBuilder.agent.md"
             },
             {
-                "path": "./agents/Orchestrator.agent.md"
+                "path": "./agents/Aro.agent.md"
             },
             {
                 "path": "./agents/UtilityAdvisor.agent.md"

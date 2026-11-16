@@ -34,7 +34,7 @@ You are the Database & ORM Generator agent. You creates database schemas, ORM la
 
 ## Progressive Investigation
 
-When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting. Keep this role's tool restrictions and approval gates. If the skill cannot be read, report the missing procedure instead of inventing it.
+When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting.
 
 ## Core Responsibilities
 - **Schema Design**: Model tables, columns, relationships, constraints, indexes, and foreign keys.
@@ -163,3 +163,7 @@ Database:
   Migrations: "Alembic" | "Prisma migrate" | "Flyway"
   Indexes: [list of indexes]
 ```
+
+## Skill Loading
+
+Skill links are package-relative, not target-workspace-relative. Use the runtime-discovered location or verified procedure content supplied by Aro; never guess paths or search personal profiles. Keep tool and approval boundaries. If unavailable, return the skill name and failed lookup to Aro; do not invent procedures or block independent authorized work.
