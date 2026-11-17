@@ -193,11 +193,20 @@ advisor in its routing row; advisor ownership is defined below.
   `coding`, `documentation`, `infrastructure`, or `review`.
 - Call `UtopikPrompt.agent-roster-for-copilot-chat/aroGetModelRecommendations`
   with that role and task category before dispatch. If the returned
-  `selectionMode` is `learned`, request its exact `modelArgument` when supported.
-  If it is `explore`, use that candidate only for low-risk simple or standard
+  `selectionMode` is `learned` or an eligible `explore`, use `recommendedModelId`
+  to find its candidate and request that candidate's exact `modelArgument` when
+  supported. Use an `explore` candidate only for low-risk simple or standard
   tasks; for complex or high-consequence tasks, use the configured model or
-  fallback below instead. If the selection is unpriced, unsupported, or rejected,
-  use the configured model or fallback below.
+  fallback below instead only when it is an eligible candidate in the returned
+  model scope. If the selection is unpriced, unsupported, or rejected, use an
+  eligible configured model or fallback below in the same scope. If none is
+  eligible, report the limitation; never bypass the selected model scope.
+  When `modelScope` is `both`, follow the returned `modelPriority` and ranked recommendation; use
+  the other group only when the preferred group has no suitable eligible model
+  or its request is unsupported or rejected. Do not infer local capability
+  tiers; use only the tool's eligible candidates.
+  If the recommendation tool is unavailable, report that model scope cannot be
+  verified; do not request an unverified fallback model.
   The returned ID is the requested model, not proof of runtime resolution.
 - For an unlearned category, use `Claude Haiku 5.5 (copilot)` for clear, bounded,
   low-risk work; use `Claude Sonnet 5.5 (copilot)` for materially complex,

@@ -54,7 +54,7 @@ function recordOutcome(scorecardValue, input) {
     return normalizeScorecard({ records: [...scorecard.records, record] });
 }
 
-function getModelRecommendations(scorecardValue, { role, taskCategory, models, getPricing }) {
+function getModelRecommendations(scorecardValue, { role, taskCategory, models, getPricing, getModelKind, preference }) {
     const scorecard = normalizeScorecard(scorecardValue);
     const historyForContext = scorecard.records.filter(record => record.role === role && record.taskCategory === taskCategory);
     const candidates = models.map(model => {
@@ -71,6 +71,7 @@ function getModelRecommendations(scorecardValue, { role, taskCategory, models, g
             vendor: model.vendor,
             modelArgument: `${model.name} (${model.vendor})`,
             family: model.family,
+            kind: getModelKind ? getModelKind(model) : undefined,
             pricing,
             successes,
             failures,
@@ -93,7 +94,9 @@ function getModelRecommendations(scorecardValue, { role, taskCategory, models, g
             : Number.NEGATIVE_INFINITY;
         candidate.selectionMode = candidate.samples < 2 ? 'explore' : 'learned';
     }
-    candidates.sort((left, right) => right.utility - left.utility
+    candidates.sort((left, right) => Number(Number.isFinite(right.cost)) - Number(Number.isFinite(left.cost))
+        || (preference ? Number(right.kind === preference) - Number(left.kind === preference) : 0)
+        || right.utility - left.utility
         || right.score - left.score
         || left.cost - right.cost
         || left.id.localeCompare(right.id));
@@ -108,10 +111,13 @@ function getModelRecommendations(scorecardValue, { role, taskCategory, models, g
     };
 }
 
-function getLearningDashboard(scorecardValue, models, getPricing) {
+function getLearningDashboard(scorecardValue, models, getPricing, options = {}) {
     const scorecard = normalizeScorecard(scorecardValue);
     return ROLES.flatMap(role => TASK_CATEGORIES.map(taskCategory => {
-        const recommendation = getModelRecommendations(scorecard, { role, taskCategory, models, getPricing });
+        const recommendation = getModelRecommendations(scorecard, {
+            role, taskCategory, models: options.getModelsForTask ? options.getModelsForTask(taskCategory) : models,
+            getPricing, getModelKind: options.getModelKind, preference: options.preference
+        });
         const sampleCount = scorecard.records.filter(record => record.role === role && record.taskCategory === taskCategory).length;
         return {
             role,
@@ -127,7 +133,7 @@ function priceOf(pricing) {
     const rates = [pricing?.inputCost, pricing?.outputCost, pricing?.cacheCost, pricing?.cacheWriteCost]
         .filter(rate => Number.isFinite(rate) && rate >= 0);
     if (rates.length) return Math.max(...rates);
-    return { low: 0, medium: 1, high: 2 }[pricing?.budgetClass] ?? Number.POSITIVE_INFINITY;
+    return { low: 75, medium: 575, high: 1001 }[pricing?.budgetClass] ?? Number.POSITIVE_INFINITY;
 }
 
 module.exports = {

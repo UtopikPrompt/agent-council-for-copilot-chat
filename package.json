@@ -40,6 +40,20 @@
         "package": "vsce package"
     },
     "contributes": {
+        "configuration": {
+            "title": "Agent Roster",
+            "properties": {
+                "agentRoster.modelLearning.localModelVendors": {
+                    "type": "array",
+                    "scope": "machine",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [],
+                    "description": "Exact VS Code vendor IDs for local model providers to include in Aro recommendations. Models from these vendors are treated as having zero token charges; hardware and energy costs are not estimated. Only add providers that run locally. Copilot models are always included."
+                }
+            }
+        },
         "viewsContainers": {
             "activitybar": [
                 {
@@ -70,7 +84,7 @@
                 "toolReferenceName": "aroGetModelRecommendations",
                 "canBeReferencedInPrompt": true,
                 "userDescription": "Read locally learned model recommendations for a specialist role and task type.",
-                "modelDescription": "Read Aro's profile-local model outcome history for the given role and task category. Returns available models with requested model IDs, native or snapshot price tiers, success/failure counts, Bayesian score, and a recommendation when at least two outcomes exist. Call this before selecting a subagent model. It does not send prompts to models and does not change Aro's main model.",
+                "modelDescription": "Read Aro's profile-local model outcome history and current cloud/local model scope and priority for the given role and task category. Returns eligible models with requested model IDs, price tiers, success/failure counts, scores, and an exploration or learned recommendation when available. Call this before selecting a subagent model. Never bypass the returned scope or priority. It does not send prompts to models and does not change Aro's main model.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

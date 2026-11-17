@@ -103,4 +103,90 @@ function getModelPricing(model) {
     };
 }
 
-module.exports = { PRICE_SNAPSHOT_DATE, classifyPrice, getModelPricing, normalizeModelName };
+function isCopilotCloudVendor(vendor) {
+    return vendor === 'copilot' || vendor === 'copilotcli';
+}
+
+function selectModelVendors(models, localModelVendors) {
+    const localVendors = new Set(localModelVendors.filter(vendor => typeof vendor === 'string' && !isCopilotCloudVendor(vendor)));
+    return models.filter(model => isCopilotCloudVendor(model.vendor) || localVendors.has(model.vendor));
+}
+
+function getLocalPricing() {
+    return {
+        inputCost: 0,
+        outputCost: 0,
+        cacheCost: null,
+        cacheWriteCost: null,
+        budgetClass: 'low',
+        source: 'local',
+        snapshotDate: null
+    };
+}
+
+function getSelectionPricing(model, localModelVendors) {
+    return !isCopilotCloudVendor(model.vendor) && localModelVendors.includes(model.vendor)
+        ? getLocalPricing() : getModelPricing(model);
+}
+
+function modelKey(model) {
+    return JSON.stringify([model.vendor, model.id]);
+}
+
+function modelKind(model, localModelVendors, classifications = {}, providerTypes = {}) {
+    if (isCopilotCloudVendor(model.vendor)) return 'cloud';
+    const explicit = classifications[modelKey(model)];
+    if (['cloud', 'local'].includes(explicit)) return explicit;
+    if (['cloud', 'local', 'unknown'].includes(providerTypes[model.vendor])) return providerTypes[model.vendor];
+    return localModelVendors.includes(model.vendor) ? 'local' : 'unknown';
+}
+
+function modelClassification(model, localModelVendors, classifications = {}, providerTypes = {}) {
+    if (classifications[modelKey(model)] === 'excluded') return 'excluded';
+    const kind = modelKind(model, localModelVendors, classifications, providerTypes);
+    return kind === 'unknown' ? 'excluded' : kind;
+}
+
+function isModelSelected(model, localModelVendors, classifications = {}, selections = {}, providerTypes = {}) {
+    const selected = selections[modelKey(model)];
+    return typeof selected === 'boolean' ? selected : modelClassification(model, localModelVendors, classifications, providerTypes) !== 'excluded';
+}
+
+function hasSelectedLocalModel(models, policy) {
+    return models.some(model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes) === 'local'
+        && isModelSelected(model, policy.localModelVendors, policy.classifications, policy.selections, policy.providerTypes));
+}
+
+function effectiveModelScope(models, policy) {
+    return hasSelectedLocalModel(models, policy) ? policy.scope : 'cloud';
+}
+
+function selectModels(models, localModelVendors, classifications, scope, options = {}) {
+    return models.filter(model => {
+        const kind = modelKind(model, localModelVendors, classifications, options.providerTypes);
+        if (!isModelSelected(model, localModelVendors, classifications, options.selections, options.providerTypes) || kind === 'unknown') return false;
+        if (scope === 'cloud' || scope === 'local') {
+            if (kind !== scope) return false;
+        }
+        if (kind === 'local' && options.taskCategory) {
+            const tiers = ['simple', 'standard', 'complex'];
+            const tier = (options.localTiers || {})[modelKey(model)];
+            return tiers.indexOf(tier) >= tiers.indexOf(options.taskCategory) && tiers.includes(options.taskCategory);
+        }
+        return true;
+    });
+}
+
+function getManagedPricing(model, localModelVendors, classifications, providerTypes, manualPriceTiers = {}) {
+    if (modelKind(model, localModelVendors, classifications, providerTypes) === 'local') {
+        return getLocalPricing();
+    }
+    const pricing = getModelPricing(model);
+    const manualTier = manualPriceTiers[modelKey(model)];
+    if (pricing.budgetClass === 'unpriced' && ['low', 'medium', 'high'].includes(manualTier)) {
+        return { ...pricing, budgetClass: manualTier, source: 'manual', snapshotDate: null };
+    }
+    return pricing;
+}
+
+module.exports = { PRICE_SNAPSHOT_DATE, classifyPrice, effectiveModelScope, getManagedPricing, getModelPricing, getSelectionPricing, hasSelectedLocalModel, isCopilotCloudVendor, isModelSelected, modelClassification, modelKey, modelKind, normalizeModelName, selectModels, selectModelVendors };
