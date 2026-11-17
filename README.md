@@ -18,6 +18,8 @@ I’m new to this project. Explain what it does and where I should start.
 
 You can ask Aro to make a plan before changing anything. Review suggestions and approve changes through the usual Copilot prompts.
 
+For complex, multi-specialist workflows, see [Advanced task prompts](docs/advanced-task-prompts.md).
+
 ## Aro (the orchestrator)
 
 Aro is the starting point for the roster. Describe what you need, and Aro consults an advisor to choose a specialist, then coordinates the task and synthesizes the result. For Aro’s routing sequence and model-selection details, see [the agent guide](docs/agents.md#aro-routing).
