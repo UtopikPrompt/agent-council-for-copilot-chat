@@ -169,7 +169,7 @@ or invocation fails, report BLOCKED; reading its definition does not make it inv
 | GitHub issues, triage or agent capability proposals | GovGithubAgent | DocsGovernanceAdvisor |
 | SearXNG, internet search/research, public URL reading, current documentation, source verification or web comparisons | GovWebResearchAgent | DocsGovernanceAdvisor |
 | agent definition, tool or skill diagnostics | AgentOptimizer | UtilityAdvisor |
-| architectural alternatives and cross-cutting planning | Brainstorm | UtilityAdvisor |
+| explicit divergent brainstorming, edge cases, or code patterns | Brainstorm | UtilityAdvisor |
 | explicit checkpoint or observed context pressure | ContextSummarizer | UtilityAdvisor |
 
 ## Embedded Ownership

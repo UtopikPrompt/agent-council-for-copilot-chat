@@ -35,11 +35,11 @@ Advisors help Aro choose the right specialist for a task. They select a route; t
 | --- | --- |
 | [BusinessKnowledgeAdvisor](agents/BusinessKnowledgeAdvisor.agent.md) | Select specialists for business needs, rules, processes, and impact questions. |
 | [CodeBackendAdvisor](agents/CodeBackendAdvisor.agent.md) | Select backend approaches for APIs, frameworks, GraphQL/tRPC, and databases. |
-| [CodeDomainAdvisor](agents/CodeDomainAdvisor.agent.md) | Select coding specialists for cross-stack work. |
+| [CodeDomainAdvisor](agents/CodeDomainAdvisor.agent.md) | Select coding, product-modernization, architecture, and rebuild specialists. |
 | [CodeFrontendAdvisor](agents/CodeFrontendAdvisor.agent.md) | Select frontend specialists for Next.js, Vite/React, or design systems. |
 | [DocsGovernanceAdvisor](agents/DocsGovernanceAdvisor.agent.md) | Select documentation and governance specialists for ADRs, GitHub, and research. |
 | [InfraDevOpsAdvisor](agents/InfraDevOpsAdvisor.agent.md) | Select DevOps specialists for infrastructure, deployment, and security work. |
-| [UtilityAdvisor](agents/UtilityAdvisor.agent.md) | Select specialists for agent diagnostics, alternatives, and checkpoints. |
+| [UtilityAdvisor](agents/UtilityAdvisor.agent.md) | Select specialists for agent diagnostics, brainstorming, and checkpoints. |
 
 </details>
 

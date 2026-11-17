@@ -250,6 +250,26 @@ test('Aro consults the required domain advisor before every specialist dispatch'
     assert.doesNotMatch(body, /Optional Advisor/);
 });
 
+test('advisor scopes and shared skill consumers stay aligned', async () => {
+    const utility = parseCustomization(await readFile(path.join(root, 'agents/UtilityAdvisor.agent.md'), 'utf8'), 'UtilityAdvisor');
+    assert.match(utility.body, /Explicit divergent brainstorming of alternatives, edge cases, or code patterns/);
+    assert.match(utility.body, /technical architecture recommendations belong to\s+`CodeDomainAdvisor`/);
+
+    const business = parseCustomization(await readFile(path.join(root, 'agents/BusinessKnowledgeAdvisor.agent.md'), 'utf8'), 'BusinessKnowledgeAdvisor');
+    assert.match(business.body, /Persistence-only or formatting-only requests for supplied analysis/);
+    assert.match(business.body, /Return `NO_MATCH` rather than selecting a documentation worker/);
+    assert.doesNotMatch(business.body, /GovDocumentationSuiteGenerator/);
+
+    const designSystem = parseCustomization(await readFile(path.join(root, 'agents/CodeDesignSystemSpecialist.agent.md'), 'utf8'), 'CodeDesignSystemSpecialist');
+    assert.match(designSystem.body, /\]\(\.\.\/skills\/frontend-experience-quality\/SKILL\.md\)/);
+    const builder = parseCustomization(await readFile(path.join(root, 'agents/MultiLanguageBuilder.agent.md'), 'utf8'), 'MultiLanguageBuilder');
+    assert.doesNotMatch(builder.body, /go-contract-validation/);
+
+    const extractions = JSON.parse(await readFile(path.join(root, 'docs/extraction-map.json'), 'utf8'));
+    assert.ok(extractions.find(entry => entry.skill === 'frontend-experience-quality').agents.includes('CodeDesignSystemSpecialist'));
+    assert.deepEqual(extractions.find(entry => entry.skill === 'go-contract-validation').agents, ['CodeGeneralist']);
+});
+
 test('Aro surfaces evidence-based roster gaps without automatic filing', async () => {
     const { body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
     assert.match(body, /## Roster Gap Signals/);
