@@ -217,6 +217,18 @@ test('Aro model learning is automatic, persistent, and has no manual benchmark U
     assert.doesNotMatch(dashboard, /sendRequest|benchmark|textarea|scorecard.*set/i);
 });
 
+test('maintenance and privacy documentation describe the learning runtime', async () => {
+    const maintenance = await readFile(path.join(root, 'docs/maintenance.md'), 'utf8');
+    const readme = await readFile(path.join(root, 'README.md'), 'utf8');
+    const instructions = await readFile(path.join(root, '.github/copilot-instructions.md'), 'utf8');
+    assert.match(maintenance, /extension-host entry point is `src\/extension\.js`/);
+    assert.doesNotMatch(maintenance, /no runtime extension-host entry point/i);
+    assert.match(readme, /outcome, fixed evidence code, timestamp and optional worker name/);
+    assert.match(readme, /profile also stores inventory choices/i);
+    assert.match(instructions, /extension host also implements the Aro model-learning tools/i);
+    assert.doesNotMatch(instructions, /should not gain activation code/i);
+});
+
 test('Aro consults the required domain advisor before every specialist dispatch', async () => {
     const { body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
     assert.match(body, /Before every specialist dispatch, invoke the relevant advisor/);

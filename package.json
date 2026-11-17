@@ -1,6 +1,6 @@
 {
     "name": "agent-roster-for-copilot-chat",
-    "displayName": "Agent Roster for Copilot Chat",
+    "displayName": "Aro: Agent Roster Orchestrator for Copilot Chat",
     "description": "A specialist agent roster and reusable workflow skills for GitHub Copilot Chat.",
     "icon": "assets/extension-icon.png",
     "version": "0.0.0",

@@ -22,9 +22,10 @@ sequenceDiagram
 	alt One specialist
 		Aro->>Advisor: Send task and candidate routes
 		Advisor-->>Aro: Recommend one indexed worker
-		Aro->>Aro: Validate recommendation and choose model
+		Aro->>Aro: Validate worker and consult model recommendations
 		Aro->>W1: Send scoped task when supported
 		W1-->>Aro: Return result and evidence
+		Aro->>Aro: Check acceptance and record eligible outcome
 	else Independent subtasks
 		par Subtask A
 			Aro->>Advisor: Consult for this specialist call
@@ -52,7 +53,7 @@ sequenceDiagram
 	Aro-->>U: Return outcome, checks, and limitations
 ```
 
-Model choice is per call: use the configured or runtime default unless exact supported model IDs are available. Use a more economical option for clear, bounded, low-risk work and a higher-reasoning option when task complexity warrants it. Report requested and resolved models separately; claim resolution only when runtime telemetry confirms it.
+Before each specialist dispatch, Aro consults the profile-local learning tool for a role and task category. It considers the bounded recommendation shortlist, selected cloud/local scope and priority, and permitted exploration. A configured or fallback model must be eligible within that scope; if scope cannot be verified or no suitable model is available, Aro reports the limitation. After checking explicit acceptance criteria, it records only evidence-backed successes or model-attributable failures. The requested model is not proof of runtime resolution; report resolution only when runtime telemetry confirms it. See [Aro Model Learning](../README.md#aro-model-learning-experimental) for inventory, privacy and limitations.
 
 | Agent | Purpose |
 | --- | --- |

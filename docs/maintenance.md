@@ -2,7 +2,7 @@
 
 ## Content Selection
 
-The initial migration reads the user-supplied prompt directory without modifying it. It retains all 49 agent definitions, their routing hierarchy and tool allowlists, and the existing model benchmark skill. Aro retains its ordered model preferences and task-aware per-call selection; the six configured selection advisors retain their economical model preference. Per-call choices require exact runtime model IDs, otherwise Aro uses its configured preference or runtime default.
+The initial migration reads the user-supplied prompt directory without modifying it. It retains all 49 agent definitions, their routing hierarchy and tool allowlists, and the existing model benchmark skill. Aro retains its ordered model preferences and task-aware per-call selection; the six configured selection advisors retain their economical model preference. Aro consults its profile-local model-learning tool before specialist dispatch and requests an eligible exact model argument when supported. Configured or fallback choices must remain eligible within the selected scope; if scope or a suitable model cannot be verified, Aro reports the limitation. Requested model IDs do not prove runtime resolution.
 
 The package excludes source Git metadata, Python caches, generated reports, historical improvement notes and client-editor settings. The separately maintained Microsoft Foundry skill bundle is not vendored: its dependencies, service assumptions and redistribution terms need an independent review. Install it separately when required.
 
@@ -24,6 +24,8 @@ The Git worker's embedded PR procedure no longer requires separately installed P
 
 - `agents/`: packaged custom agent definitions.
 - `skills/<name>/SKILL.md`: packaged, independently discoverable workflows.
+- `src/`: extension-host activation, model-learning tools, policy and pricing.
+- `media/`: Aro Learning dashboard assets.
 - `docs/agents.md`: role catalog; `docs/skills.md`: shared workflow catalog.
 - `docs/extraction-map.json`: shared-workflow provenance and consumers.
 - `scripts/validate.mjs` and `test/`: structural lint and regression tests; not shipped in the VSIX.
@@ -33,7 +35,7 @@ When changing a role, synchronize its name/file, manifest contribution, Orchestr
 
 ## Validation
 
-Run `npm test` and `npm run lint`, then `npm run package`. Inspect package contents with `npx vsce ls` when changing exclusions. There is deliberately no runtime extension-host entry point or VS Code proposed API dependency.
+Run `npm test` and `npm run lint`, then `npm run vscode:prepublish` for the combined gate. Run `npm run package` and inspect package contents when packaging behavior or contributed assets change. The extension-host entry point is `src/extension.js`; it uses stable VS Code APIs and does not declare proposed APIs.
 
 Before distribution, test the actual VSIX in a clean VS Code profile with Copilot enabled:
 
@@ -45,5 +47,6 @@ Before distribution, test the actual VSIX in a clean VS Code profile with Copilo
 6. Confirm the benchmark is not selected automatically and is available explicitly as `/agent-model-benchmark`.
 7. Repeat discovery, delegation and skill loading in an intended SSH/container window. Check missing-tool reporting without broadening permissions.
 8. In an unrelated repository without this package's `agents/` or `skills/` directories, request an As-Is System Reference. Verify the investigation skill loads from the installed extension, not a guessed target-relative path. Verify Aro obtains specialist findings, routes complete content through the advisor-selected documentation writer, and reads back the reference, coverage register and target repository's `docs/system-reference/README.md` resume point. This target README is separate from the extension repository's root README. In a separate controlled trial, supply an unavailable required skill location and verify named dependency recovery, no fabricated procedure, and continuation of independent authorized work. Record analysis and persistence status separately if writer invocation or tools fail.
+9. Open Aro Learning and verify model inventory, sidebar counts, scope and priority controls. In a fresh Aro chat, give a low-risk read-only task with verifiable acceptance criteria; inspect the recommendation and outcome tool calls and confirm any genuinely verified outcome appears after refresh and reload. Check that the bounded shortlist respects scope and indicates truncation. Test local-only selection only when a configured local provider and runtime support are available; do not manufacture outcomes or infer actual model resolution from the requested ID.
 
 Static tests and VSIX packaging do not prove live model behavior, remote discovery, authentication or MCP availability. Record those smoke results separately. The project uses the [PolyForm Noncommercial License 1.0.0](../LICENSE); commercial use requires separate permission. Verify rights to all included content and publisher ownership before Marketplace publication. Local packaging does not grant those rights or publish the extension.

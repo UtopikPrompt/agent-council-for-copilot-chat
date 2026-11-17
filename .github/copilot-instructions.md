@@ -2,7 +2,7 @@
 
 ## Repository Purpose
 
-This repository packages a curated agent roster and reusable workflow skills as a portable VS Code extension for GitHub Copilot Chat. Its main product is the Markdown instructions in `agents/` and `skills/`, registered through `package.json`; it is not a runtime agent framework and should not gain activation code or automatic access to a user's prompt profile.
+This repository packages a curated agent roster and reusable workflow skills as a portable VS Code extension for GitHub Copilot Chat. Its main product is the Markdown instructions in `agents/` and `skills/`, registered through `package.json`. The extension host also implements the Aro model-learning tools and UI in `src/` and `media/`; it is not a runtime agent framework and must not automatically access a user's prompt profile.
 
 Agent definitions are the runtime source of truth for role, tools, routing and task behavior. Skills hold reusable procedures shared by multiple agents. The roster originated as user-level prompts, but the packaged extension must remain self-contained and generic. Never require runtime access to a personal prompt folder or include personal paths, identities, or source-project details.
 
@@ -16,7 +16,7 @@ Keep Aro's route index compact and synchronized with advisor selection cues. Do 
 
 ## Model Policy
 
-Preserve intentional `model` frontmatter preferences. They are ordered defaults, not task-aware routing. Aro chooses a model per worker call when the runtime exposes an exact supported model ID: use the economical tier for clear, bounded, low-risk work and a higher-reasoning tier only when task complexity warrants it. Otherwise use configured preferences or the runtime default and report limitations. Do not pin every worker to a model or claim quality, latency, context, or cost benefits without measured evidence. Keep model benchmarking explicit and separate from normal dispatch. High-consequence decisions still require competent human validation.
+Preserve intentional `model` frontmatter preferences. They are ordered defaults, not task-aware routing. Aro consults the profile-local recommendation tool before specialist dispatch, respecting model scope, priority, eligibility and its bounded shortlist. Exploration is limited to low-risk simple or standard tasks; configured or fallback models must be eligible within the selected scope. If scope cannot be verified or no suitable model is available, report the limitation rather than bypassing it. Record only evidence-backed outcomes and distinguish the requested model from runtime resolution. Do not pin every worker to a model or claim quality, latency, context, or cost benefits without measured evidence. Keep model benchmarking explicit and separate from normal dispatch. High-consequence decisions still require competent human validation.
 
 ## Skills And Agent Changes
 

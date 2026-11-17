@@ -1,4 +1,4 @@
-# Agent Roster for Copilot Chat
+# Aro: Agent Roster Orchestrator for Copilot Chat
 
 **Tell Copilot what you need. Aro finds the right specialist.**
 
@@ -117,7 +117,7 @@ Use **Model scope** to select Cloud only, Local only, or Both. Local only and Bo
 
 ## Privacy And Permissions
 
-The extension contributes two Aro model-learning tools backed by this VS Code profile's global state. They store only requested model IDs, roles, task categories, fixed outcome codes, and worker names. They do not store prompts or responses. Other agent tasks use tools available in Copilot Chat. Review proposed changes and permission prompts before approving them.
+The extension contributes two Aro model-learning tools backed by this VS Code profile's global state. Outcome records contain the requested model ID, role, task category, outcome, fixed evidence code, timestamp and optional worker name; the scorecard retains at most 1,000 records. The profile also stores inventory choices, including provider and model identifiers, scope, priority, selections and manual tiers. The local-provider vendor setting is machine-scoped. The learning feature does not store prompts or responses. Other agent tasks use tools available in Copilot Chat. Review proposed changes and permission prompts before approving them.
 
 ## License
 
