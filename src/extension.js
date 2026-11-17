@@ -3,6 +3,7 @@ const { randomBytes } = require('node:crypto');
 const { effectiveModelScope, getInventorySummary, getManagedPricing, hasSelectedLocalModel, isCopilotCloudVendor, isModelSelected, modelKey, modelKind, selectModels } = require('./model-pricing');
 const {
     compactModelRecommendations,
+    excludeUnavailableModels,
     getLearningDashboard,
     getModelRecommendations,
     normalizeScorecard,
@@ -95,7 +96,9 @@ function createLearningSidebar(context) {
                     preference: summary.scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
                 });
                 const recommended = result.candidates.find(candidate => candidate.id === result.recommendedModelId);
-                rows.push(item(`Latest context: ${last.role} / ${last.taskCategory}`, recommended ? `${recommended.name} (${recommended.vendor})` : 'No eligible model', 'lightbulb', openDashboard, 'Current recommendation for the most recently recorded outcome; not proof of the model used.'));
+                const fallback = last.taskCategory === 'complex' && result.candidates.some(candidate => Number.isFinite(candidate.cost))
+                    ? 'No learned recommendation' : 'No eligible model';
+                rows.push(item(`Latest context: ${last.role} / ${last.taskCategory}`, recommended ? `${recommended.name} (${recommended.vendor})` : fallback, 'lightbulb', openDashboard, 'Current recommendation for the most recently recorded outcome; not proof of the model used.'));
             } else {
                 rows.push(item('Latest context', 'No recorded outcomes', 'lightbulb', openDashboard));
             }
@@ -169,7 +172,8 @@ function registerModelLearningTools(context) {
             const policy = getInventoryPolicy(context);
             const availableModels = await vscode.lm.selectChatModels();
             const scope = effectiveModelScope(availableModels, policy);
-            const models = selectModels(availableModels, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: input.taskCategory });
+            const eligibleModels = selectModels(availableModels, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: input.taskCategory });
+            const models = excludeUnavailableModels(eligibleModels, { excludedModels: input.excludedModels, excludedProviders: input.excludedProviders });
             const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
             const recommendations = getModelRecommendations(scorecard, {
                 role: input.role,
@@ -268,6 +272,7 @@ function openModelLearning(context) {
             }));
             inventoryModels = summaries;
             const scope = effectiveModelScope(summaries, policy);
+            const getPricing = model => getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers);
             panel.webview.postMessage({
                 type: 'learningDashboard',
                 scope,
@@ -278,11 +283,11 @@ function openModelLearning(context) {
                     kind: modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
                     selected: isModelSelected(model, policy.localModelVendors, policy.classifications, policy.selections, policy.providerTypes),
                     localTier: policy.localTiers[modelKey(model)] || 'unrated',
-                    pricing: getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers)
+                    pricing: getPricing(model)
                 })),
                 providerTypes: Object.fromEntries([...new Set(summaries.map(model => model.vendor))].map(vendor => [vendor, isCopilotCloudVendor(vendor) ? 'cloud' : policy.providerTypes[vendor] || (policy.localModelVendors.includes(vendor) ? 'local' : 'unknown')])),
                 lockedProviders: [...new Set(summaries.map(model => model.vendor).filter(isCopilotCloudVendor))],
-                dashboard: getLearningDashboard(scorecard, summaries, model => getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers), {
+                dashboard: getLearningDashboard(scorecard, summaries, getPricing, {
                     getModelsForTask: taskCategory => selectModels(summaries, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory }),
                     getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
                     preference: scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
@@ -307,6 +312,7 @@ function openModelLearning(context) {
         if (['setModelScope', 'setModelPriority', 'setModelSelected', 'setProviderSelected', 'setProviderType', 'setLocalTier', 'setManualPriceTier'].includes(message.type)) {
             void enqueueInventoryUpdate(async () => {
                 const policy = getInventoryPolicy(context);
+                const hadSelectedLocalModel = hasSelectedLocalModel(inventoryModels, policy);
                 if (message.type === 'setModelScope') {
                     if (!['cloud', 'local', 'both'].includes(message.scope)) throw new Error('Invalid model scope.');
                     if (message.scope !== 'cloud' && !hasSelectedLocalModel(inventoryModels, policy)) throw new Error('Select a local model before using this scope.');
@@ -353,7 +359,7 @@ function openModelLearning(context) {
                         policy.providerTypes = { ...policy.providerTypes, [message.vendor]: message.kind };
                     }
                 }
-                if (['setModelSelected', 'setProviderSelected', 'setProviderType'].includes(message.type) && !hasSelectedLocalModel(inventoryModels, policy)) {
+                if (['setModelSelected', 'setProviderSelected', 'setProviderType'].includes(message.type) && hadSelectedLocalModel && !hasSelectedLocalModel(inventoryModels, policy)) {
                     policy.scope = 'cloud';
                 }
                 await saveInventoryPolicy(context, policy);
@@ -410,7 +416,7 @@ function getLearningHtml(webview, extensionUri) {
                 <span id="learning-message">Loading Aro's scorecard...</span>
             </div>
             <fieldset class="scope-controls" id="model-scope"><legend>Model scope</legend><label><input type="radio" name="model-scope" value="cloud"> Cloud only</label><label><input type="radio" name="model-scope" value="local" disabled> Local only</label><label><input type="radio" name="model-scope" value="both" disabled> Both</label><label for="model-priority">Priority <select id="model-priority" disabled><option value="cloud-first">Cloud first</option><option value="local-first">Local first</option></select></label></fieldset>
-            <div class="table-wrap"><table><thead><tr><th>Role</th><th>Task</th><th>Recommended model</th><th>Price tier</th><th>Selection mode</th><th>Outcomes</th><th>Observed quality</th><th>Price source</th></tr></thead><tbody id="recommendations"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Role / task</th><th>Recommended model</th><th>Price tier</th><th>Selection mode</th><th>Outcomes</th><th>Observed quality</th><th>Price source</th></tr></thead><tbody id="recommendations"></tbody></table></div>
             <details id="model-inventory" open>
                 <summary>Model inventory <span id="model-count">0 models</span></summary>
                 <div class="inventory-content"><div class="inventory-toolbar"><label class="inventory-search">Search models <input id="model-search" type="search" placeholder="Name or provider"></label><div id="provider-controls" class="provider-controls"></div></div><details class="provider-settings"><summary>Provider types</summary><div id="provider-types" class="provider-types"></div></details><div class="table-wrap"><table><thead><tr><th>Use</th><th>Model</th><th>Provider / family</th><th>Tier</th><th>Price / 1M tokens</th><th>Source</th></tr></thead><tbody id="models"></tbody></table></div></div>

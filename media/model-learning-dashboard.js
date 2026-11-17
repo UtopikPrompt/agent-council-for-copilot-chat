@@ -164,7 +164,7 @@
                 const recommended = cell?.candidates.find(model => model.id === cell.recommendedModelId);
                 recommendation.textContent = recommended
                     ? `${recommended.name} (${recommended.vendor})`
-                    : 'No eligible priced model';
+                    : task === 'complex' && cell?.eligibleCount ? 'No learned recommendation' : 'No eligible priced model';
                 const price = document.createElement('td');
                 price.textContent = recommended?.pricing?.budgetClass || '—';
                 const mode = document.createElement('td');
@@ -174,7 +174,7 @@
                 const score = document.createElement('td');
                 score.textContent = recommended
                     ? `${recommended.successes} pass / ${recommended.failures} fail (${Math.round(recommended.score * 100)}%)`
-                    : `${cell?.sampleCount || 0} / 2 minimum outcomes`;
+                    : task === 'complex' && cell?.eligibleCount ? 'Needs 2 outcomes per model' : '—';
                 const source = document.createElement('td');
                 source.textContent = recommended?.pricing?.source === 'vscode'
                     ? 'Native rate'
@@ -238,7 +238,9 @@
             renderModels();
             renderProviders();
             renderDashboard();
-            setStatus(`${message.recordCount} verified outcomes stored in this VS Code profile.`, 'is-ready');
+            setStatus(scope === 'local' && !hasSelectedLocalModel
+                ? `Local only: no selected local model available. ${message.recordCount} outcomes stored.`
+                : `${message.recordCount} verified outcomes stored in this VS Code profile.`, 'is-ready');
         } else if (message.type === 'learningDashboardError') {
             for (const control of document.querySelectorAll('#model-scope input')) control.checked = control.value === scope;
             byId('model-priority').value = priority;

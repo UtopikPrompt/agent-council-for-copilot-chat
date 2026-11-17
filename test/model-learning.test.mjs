@@ -3,8 +3,24 @@ import test from 'node:test';
 import learningModule from '../src/model-learning.js';
 import pricingModule from '../src/model-pricing.js';
 
-const { compactModelRecommendations, emptyScorecard, getLearningDashboard, getModelRecommendations, normalizeScorecard, recordOutcome } = learningModule;
+const { compactModelRecommendations, emptyScorecard, excludeUnavailableModels, getLearningDashboard, getModelRecommendations, normalizeScorecard, recordOutcome } = learningModule;
 const getPricing = model => ({ inputCost: model.inputCost, outputCost: model.outputCost, budgetClass: model.budgetClass });
+
+test('fallback exclusions distinguish an exact model from a whole provider', () => {
+    const models = [
+        { id: 'shared', vendor: 'copilot' },
+        { id: 'shared', vendor: 'other-cloud' },
+        { id: 'second', vendor: 'copilot' },
+        { id: 'local', vendor: 'ollama' }
+    ];
+    const exact = excludeUnavailableModels(models, { excludedModels: [{ id: 'shared', vendor: 'copilot' }] });
+    assert.deepEqual(exact.map(model => `${model.vendor}/${model.id}`), ['other-cloud/shared', 'copilot/second', 'ollama/local']);
+    const provider = excludeUnavailableModels(models, { excludedProviders: ['copilot'] });
+    assert.deepEqual(provider.map(model => `${model.vendor}/${model.id}`), ['other-cloud/shared', 'ollama/local']);
+    assert.equal(models.length, 4);
+    assert.throws(() => excludeUnavailableModels(models, { excludedProviders: Array(21).fill('copilot') }), /at most 20/);
+    assert.throws(() => excludeUnavailableModels(models, { excludedModels: [{ id: 'shared' }] }), /model ID and vendor/);
+});
 
 test('compact recommendations retain the winner, learned and configured fallbacks without returning the full inventory', () => {
     const models = Array.from({ length: 60 }, (_, index) => ({
@@ -92,7 +108,7 @@ test('local scope availability depends on selected local models, not task eligib
     policy.selections[pricingModule.modelKey(models[0])] = false;
     assert.equal(pricingModule.hasSelectedLocalModel(models, policy), false);
     assert.equal(pricingModule.effectiveModelScope(models, policy), 'cloud');
-    assert.equal(pricingModule.effectiveModelScope([], { ...policy, scope: 'local' }), 'cloud');
+    assert.equal(pricingModule.effectiveModelScope([], { ...policy, scope: 'local' }), 'local');
 });
 
 test('a manual price tier makes an unpriced cloud model eligible without inventing token rates', () => {
@@ -210,7 +226,7 @@ test('a verified failure lowers only that model, role, and task score', () => {
     assert.equal(recommendations.candidates.find(model => model.id === 'complex-c').samples, 0);
 });
 
-test('explores a priced candidate before evidence is available', () => {
+test('complex tasks retain eligible fallbacks but do not recommend unlearned exploration', () => {
     const scorecard = recordOutcome(emptyScorecard(), {
         role: 'review', taskCategory: 'complex', modelId: 'model-a', outcome: 'failure', evidenceCode: 'incorrect'
     });
@@ -221,8 +237,34 @@ test('explores a priced candidate before evidence is available', () => {
         getPricing
     });
 
-    assert.equal(result.recommendedModelId, 'model-a');
-    assert.equal(result.selectionMode, 'explore');
+    assert.equal(result.recommendedModelId, null);
+    assert.equal(result.selectionMode, 'fallback');
+    assert.equal(result.candidates[0].selectionMode, 'explore');
+    const compact = compactModelRecommendations(result);
+    assert.equal(compact.selectionMode, 'fallback');
+    assert.equal(compact.candidates[0].id, 'model-a');
+    const dashboard = getLearningDashboard(scorecard, [{ id: 'model-a', name: 'Model A', vendor: 'copilot', inputCost: 200, outputCost: 1000 }], getPricing);
+    const row = dashboard.find(item => item.role === 'review' && item.taskCategory === 'complex');
+    assert.equal(row.recommendedModelId, null);
+    assert.equal(row.eligibleCount, 1);
+});
+
+test('complex tasks recommend learned models before cheaper unlearned candidates', () => {
+    let scorecard = emptyScorecard();
+    for (let index = 0; index < 2; index += 1) {
+        scorecard = recordOutcome(scorecard, { role: 'coding', taskCategory: 'complex', modelId: 'learned', outcome: 'success', evidenceCode: 'acceptance_passed' });
+    }
+    const models = [
+        { id: 'cheap', name: 'Cheap', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'learned', name: 'Learned', vendor: 'copilot', inputCost: 200, outputCost: 1000 }
+    ];
+    const result = getModelRecommendations(scorecard, { role: 'coding', taskCategory: 'complex', models, getPricing });
+    assert.equal(result.recommendedModelId, 'learned');
+    assert.equal(result.selectionMode, 'learned');
+    assert.equal(compactModelRecommendations(result).candidates[0].id, 'learned');
+    const row = getLearningDashboard(scorecard, models, getPricing).find(item => item.role === 'coding' && item.taskCategory === 'complex');
+    assert.equal(row.recommendedModelId, 'learned');
+    assert.equal(row.candidates[0].id, 'learned');
 });
 
 test('dashboard marks cold-start choices as exploration and then learns from repeated outcomes', () => {

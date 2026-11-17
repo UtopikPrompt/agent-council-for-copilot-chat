@@ -18,30 +18,49 @@ I’m new to this project. Explain what it does and where I should start.
 
 You can ask Aro to make a plan before changing anything. Review suggestions and approve changes through the usual Copilot prompts.
 
-## Agents
+## Aro (the orchestrator)
 
-The roster includes 49 specialists. Start with Aro: describe what you need, and Aro selects a relevant specialist.
+Aro is the starting point for the roster. Describe what you need, and Aro consults an advisor to choose a specialist, then coordinates the task and synthesizes the result. For Aro’s routing sequence and model-selection details, see [the agent guide](docs/agents.md#aro-routing).
+
+## Advisors
+
+Advisors help Aro choose the right specialist for a task. They select a route; the selected agent does the work.
 
 <details>
-<summary>Browse all 49 agents</summary>
+<summary>Browse all 7 advisors</summary>
+
+| Advisor | Purpose |
+| --- | --- |
+| [BusinessKnowledgeAdvisor](agents/BusinessKnowledgeAdvisor.agent.md) | Select specialists for business needs, rules, processes, and impact questions. |
+| [CodeBackendAdvisor](agents/CodeBackendAdvisor.agent.md) | Select backend approaches for APIs, frameworks, GraphQL/tRPC, and databases. |
+| [CodeDomainAdvisor](agents/CodeDomainAdvisor.agent.md) | Select coding specialists for cross-stack work. |
+| [CodeFrontendAdvisor](agents/CodeFrontendAdvisor.agent.md) | Select frontend specialists for Next.js, Vite/React, or design systems. |
+| [DocsGovernanceAdvisor](agents/DocsGovernanceAdvisor.agent.md) | Select documentation and governance specialists for ADRs, GitHub, and research. |
+| [InfraDevOpsAdvisor](agents/InfraDevOpsAdvisor.agent.md) | Select DevOps specialists for infrastructure, deployment, and security work. |
+| [UtilityAdvisor](agents/UtilityAdvisor.agent.md) | Select specialists for agent diagnostics, alternatives, and checkpoints. |
+
+</details>
+
+## Agents
+
+The roster includes 41 specialist agents, selected by Aro with help from the advisors above.
+
+<details>
+<summary>Browse all 41 agents</summary>
 
 | Agent | Purpose |
 | --- | --- |
 | [AgentOptimizer](agents/AgentOptimizer.agent.md) | Analyze and optimize VS Code agents, including tools, triggers, skills, and instructions. |
 | [Brainstorm](agents/Brainstorm.agent.md) | Generate architectural alternatives, edge cases, and code-pattern options. |
-| [BusinessKnowledgeAdvisor](agents/BusinessKnowledgeAdvisor.agent.md) | Select specialists for business needs, rules, processes, and impact questions. |
 | [BusinessKnowledgeExpert](agents/BusinessKnowledgeExpert.agent.md) | Produce evidence-grounded business-rule, process, and impact analyses. |
 | [CodeArchitectureExpert](agents/CodeArchitectureExpert.agent.md) | Document current architecture or propose a target architecture from supplied evidence. |
-| [CodeBackendAdvisor](agents/CodeBackendAdvisor.agent.md) | Select backend approaches for APIs, frameworks, GraphQL/tRPC, and databases. |
 | [CodeComfyUICustomNodeSpecialist](agents/CodeComfyUICustomNodeSpecialist.agent.md) | Develop and debug ComfyUI custom nodes, packs, and frontend extensions. |
 | [CodeContextSchemaAuditor](agents/CodeContextSchemaAuditor.agent.md) | Audit schemas, dependencies, configuration, and environment constraints. |
 | [CodeDatabaseORMGenerator](agents/CodeDatabaseORMGenerator.agent.md) | Generate database schemas, migrations, indexes, and ORM setup. |
 | [CodeDesignSystemSpecialist](agents/CodeDesignSystemSpecialist.agent.md) | Build shared UI components, design tokens, themes, and documentation. |
-| [CodeDomainAdvisor](agents/CodeDomainAdvisor.agent.md) | Select coding specialists for cross-stack work. |
 | [CodeExpressSpecialist](agents/CodeExpressSpecialist.agent.md) | Implement and debug Express APIs using repository conventions. |
 | [CodeFastApiSpecialist](agents/CodeFastApiSpecialist.agent.md) | Scaffold and implement FastAPI services with Pydantic and SQLAlchemy. |
 | [CodeFrameworkDiagnostician](agents/CodeFrameworkDiagnostician.agent.md) | Diagnose framework errors and validate local dependencies. |
-| [CodeFrontendAdvisor](agents/CodeFrontendAdvisor.agent.md) | Select frontend specialists for Next.js, Vite/React, or design systems. |
 | [CodeGeneralist](agents/CodeGeneralist.agent.md) | Implement, review, debug, or refactor when no specialist fits. |
 | [CodeGraphQLTRPCAgent](agents/CodeGraphQLTRPCAgent.agent.md) | Build GraphQL APIs and tRPC services. |
 | [CodeMockupWireframeSpecialist](agents/CodeMockupWireframeSpecialist.agent.md) | Produce direct, readable screen and flow mockups. |
@@ -52,7 +71,6 @@ The roster includes 49 specialists. Start with Aro: describe what you need, and 
 | [CodeRebuildEngineer](agents/CodeRebuildEngineer.agent.md) | Produce an evidence-linked As-Is System Reference or integrate supplied reports. |
 | [CodeSpringBootSpecialist](agents/CodeSpringBootSpecialist.agent.md) | Implement and debug Spring Boot services using existing project conventions. |
 | [ContextSummarizer](agents/ContextSummarizer.agent.md) | Create concise checkpoints for long or interrupted sessions. |
-| [DocsGovernanceAdvisor](agents/DocsGovernanceAdvisor.agent.md) | Select documentation and governance specialists for ADRs, GitHub, and research. |
 | [GovArchitectureRecordsExpert](agents/GovArchitectureRecordsExpert.agent.md) | Draft and maintain ADRs, RFCs, and architecture records. |
 | [GovDocumentationSuiteGenerator](agents/GovDocumentationSuiteGenerator.agent.md) | Write repository documentation and generate documentation suites. |
 | [GovGitWorkflowAgent](agents/GovGitWorkflowAgent.agent.md) | Manage authorized Git branches, commits, pushes, pull requests, and recovery. |
@@ -62,7 +80,6 @@ The roster includes 49 specialists. Start with Aro: describe what you need, and 
 | [InfraCIDiagnostics](agents/InfraCIDiagnostics.agent.md) | Diagnose CI and GitHub Actions failures and propose minimal fixes. |
 | [InfraCloudDeploymentAgent](agents/InfraCloudDeploymentAgent.agent.md) | Design and implement cross-cloud deployment and provisioning. |
 | [InfraDevContainerSpecialist](agents/InfraDevContainerSpecialist.agent.md) | Configure development containers and workspace environments. |
-| [InfraDevOpsAdvisor](agents/InfraDevOpsAdvisor.agent.md) | Select DevOps specialists for infrastructure, deployment, and security work. |
 | [InfraIaCGenerator](agents/InfraIaCGenerator.agent.md) | Generate and validate Terraform, Pulumi, Bicep, and ARM infrastructure. |
 | [InfraKubernetesEngineer](agents/InfraKubernetesEngineer.agent.md) | Engineer Kubernetes manifests, networking, RBAC, and operations. |
 | [InfraLLMInferenceSpecialist](agents/InfraLLMInferenceSpecialist.agent.md) | Diagnose and configure local LLM inference and model capacity. |
@@ -74,14 +91,8 @@ The roster includes 49 specialists. Start with Aro: describe what you need, and 
 | [InfraSecurityAuthAgent](agents/InfraSecurityAuthAgent.agent.md) | Design and diagnose authentication, authorization, RBAC, and secrets. |
 | [InfraTestInfrastructureGenerator](agents/InfraTestInfrastructureGenerator.agent.md) | Generate test suites, fixtures, mocks, coverage, and CI gates. |
 | [MultiLanguageBuilder](agents/MultiLanguageBuilder.agent.md) | Coordinate Python, Node.js, and TypeScript builds and dependencies. |
-| [Aro](agents/Aro.agent.md) | Orchestrate advisor-led specialist selection, task sequencing, and result synthesis. |
-| [UtilityAdvisor](agents/UtilityAdvisor.agent.md) | Select specialists for agent diagnostics, alternatives, and checkpoints. |
 
 </details>
-
-<br>
-
-For Aro’s routing sequence and model-selection details, see [the agent guide](docs/agents.md#aro-routing).
 
 ## Skills
 
@@ -109,11 +120,25 @@ The extension also includes 10 reusable guides for common tasks, such as investi
 
 Open the **Agent Roster** activity-bar view and select **Open Aro Learning** to see price-aware recommendations by specialist role and task type. A contextual UCB-style policy balances observed outcomes, conservative exploration, and model price. Aro records outcomes only after checking explicit acceptance criteria; ambiguous failures do not count against a model. Exploration is limited to low-risk simple or standard tasks. The scorecard is stored in this VS Code profile and contains no prompts or responses. Aro can request the recommended subagent model when the runtime accepts its exact ID; actual model resolution may not be observable. Rates use native metadata when available and a dated snapshot fallback otherwise. This updates recommendations, not model weights or training data.
 
+<p align="center">
+	<img src="assets/aro-learning-dashboard.png" alt="Aro Model Learning dashboard showing illustrative local and cloud recommendations and model inventory" width="800">
+</p>
+
+The screenshot uses illustrative models, rates, and outcomes.
+
 Recommendation scoring considers the full eligible inventory, but the tool returns a bounded shortlist to reduce chat context. The shortlist includes the top candidates and eligible provider, learned, and configured Copilot fallbacks where available; its truncation flag indicates when other eligible candidates were omitted.
+
+Aro selects models automatically and separately for advisor and specialist calls, without inspecting or changing the user's chat model. Advisor recommendations appear in the table by task type; there is no manual advisor-model selector. For confirmed provider or model availability failures, Aro can requery with temporary exclusions and make at most three subagent attempts within the configured scope and priority. Provider failures are not scored as model-quality failures, and operations with uncertain side effects are not repeated. Advisor routing outcomes are recorded only when correctness can be independently verified. Fallback depends on the runtime exposing enough failure detail; a VS Code vendor ID is not proof of a separate credit pool.
+
+For complex tasks, the dashboard shows no learned recommendation until an eligible model has at least two recorded outcomes for that role and task. Aro may still use an eligible configured fallback. Two outcomes are a minimum sample, not proof of quality; the displayed price tier is not a capability rating.
 
 The sidebar shows the current scope and priority, selected cloud and local counts, unrated local models, outcome count, and the current recommendation for the most recently recorded role and task. Select the scope or priority row to change it; open the dashboard for the complete inventory and scorecard. The latest-context recommendation is recalculated from current settings and is not proof of which model ran.
 
-Use **Model scope** to select Cloud only, Local only, or Both. Local only and Both are available when at least one local model is checked, even if it is unrated. Explicitly clearing the last checked local model changes the scope to Cloud only; if a provider is temporarily unavailable, Cloud only is used until it returns without overwriting the saved scope. With Both selected, choose Cloud first or Local first in **Priority**. The preferred group is tried first, falling back to the other when no eligible priced model is available for the task. Priority defaults to Cloud first and is retained when switching scopes. In **Model inventory**, use each checkbox to include or exclude a model, or use the provider buttons to select or clear all of a provider's models, including those hidden by search. The provider, family and version come from VS Code model metadata. Under **Provider types**, assign other providers as Cloud or Local; unknown providers are not eligible. The `copilot` and `copilotcli` vendors are always Cloud; vendors in the machine setting `agentRoster.modelLearning.localModelVendors` default to Local. Existing per-model classifications remain in effect until their provider type is explicitly changed, except the fixed Copilot cloud providers. The shared **Tier** column shows a price-derived tier for cloud models and a manually assigned capability tier for local models. For local models, Low supports simple tasks, Medium supports simple and standard tasks, and High supports all categories. Unrated local models are not eligible. Price is only a proxy, not verified evidence of model capability. Only mark providers you know are local as Local: local token charges are treated as zero, without estimating hardware or energy costs. For an unpriced cloud model, choose a manual price tier in its row to make it eligible; this is a rough selection estimate, not a quoted token rate, and native or snapshot pricing takes precedence if it later becomes available. Choices are stored in the VS Code profile and do not erase outcome history. Runtime support for requesting a particular subagent model is not guaranteed.
+Use **Model scope** to select Cloud only, Local only, or Both. Local only and Both are available when at least one local model is checked, even if it is unrated. Explicitly clearing the last checked local model changes the scope to Cloud only. If no selected local model is currently available, Both effectively uses Cloud only, while Local only remains local and reports the limitation; temporary discovery changes do not overwrite the saved scope. With Both selected, choose Cloud first or Local first in **Priority**. The preferred group is tried first, falling back to the other when no eligible priced model is available for the task. Priority defaults to Cloud first and is retained when switching scopes.
+
+In **Model inventory**, use each checkbox to include or exclude a model, or use the provider buttons to select or clear all of a provider's models, including those hidden by search. The provider, family and version come from VS Code model metadata. Under **Provider types**, assign other providers as Cloud or Local; unknown providers are not eligible. The `copilot` and `copilotcli` vendors are always Cloud; vendors in the machine setting `agentRoster.modelLearning.localModelVendors` default to Local. Existing per-model classifications remain in effect until their provider type is explicitly changed, except the fixed Copilot cloud providers.
+
+The shared **Tier** column shows a price-derived tier for cloud models and a manually assigned capability tier for local models. For local models, Low supports simple tasks, Medium supports simple and standard tasks, and High supports all categories. Unrated local models are not eligible. Price is only a proxy, not verified evidence of model capability. Only mark providers you know are local as Local: local token charges are treated as zero, without estimating hardware or energy costs. For an unpriced cloud model, choose a manual price tier in its row to make it eligible; this is a rough selection estimate, not a quoted token rate, and native or snapshot pricing takes precedence if it later becomes available. Choices are stored in the VS Code profile and do not erase outcome history. Runtime support for requesting a particular subagent model is not guaranteed.
 
 ## Privacy And Permissions
 

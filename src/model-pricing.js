@@ -158,6 +158,7 @@ function hasSelectedLocalModel(models, policy) {
 }
 
 function effectiveModelScope(models, policy) {
+    if (policy.scope === 'local') return 'local';
     return hasSelectedLocalModel(models, policy) ? policy.scope : 'cloud';
 }
 

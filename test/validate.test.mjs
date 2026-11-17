@@ -42,12 +42,20 @@ test('Aro learns model outcomes by role and task using evidence-gated tools', as
     assert.ok(modelSelection, 'Missing model selection guidance');
     assert.match(modelSelection, /aroGetModelRecommendations/);
     assert.match(modelSelection, /selectionMode/);
+    assert.match(modelSelection, /`selectionMode` is `fallback`/);
     assert.match(modelSelection, /use `recommendedModelId`\s+to find its candidate/);
     assert.match(modelSelection, /exact `modelArgument` when\s+supported/);
     assert.match(modelSelection, /`learned` or an eligible `explore`/);
     assert.match(modelSelection, /never bypass the selected model scope/);
     assert.match(modelSelection, /aroRecordModelOutcome/);
     assert.match(modelSelection, /bounded shortlist/);
+    assert.match(modelSelection, /Before each advisor or specialist call/);
+    assert.match(modelSelection, /never inspect, mirror, or\s+change the user's Aro chat model/);
+    assert.match(modelSelection, /`excludedModels`/);
+    assert.match(modelSelection, /`excludedProviders`/);
+    assert.match(modelSelection, /at most three subagent attempts/);
+    assert.match(modelSelection, /Never retry a potentially mutating worker unless evidence shows it did not\s+start/);
+    assert.match(modelSelection, /Valid JSON, an allowlisted name, or a worker's later result alone is\s+not proof/);
     assert.match(modelSelection, /Do not\s+score routing mistakes,\s+missing input,\s+unsupported models, tool failures/);
     assert.ok(modelSelection.includes('Claude Haiku 5.5 (copilot)'));
     assert.ok(modelSelection.includes('clear, bounded'));
@@ -209,6 +217,8 @@ test('Aro model learning is automatic, persistent, and has no manual benchmark U
     assert.match(extension, /selectChatModelsWithTimeout/);
     assert.match(extension, /MODEL_DISCOVERY_TIMEOUT_MS = 15_000/);
     assert.match(extension, /id="model-count"/);
+    assert.doesNotMatch(extension, /class="advisor-model"/);
+    assert.match(extension, /<th>Role \/ task<\/th><th>Recommended model<\/th><th>Price tier<\/th><th>Selection mode<\/th><th>Outcomes<\/th><th>Observed quality<\/th><th>Price source<\/th>/);
     const dashboard = await readFile(path.join(root, 'media/model-learning-dashboard.js'), 'utf8');
     assert.match(dashboard, /refreshLearning/);
     assert.match(dashboard, /vscode\.postMessage\(\{ type: 'ready' \}\)/);
@@ -225,6 +235,9 @@ test('maintenance and privacy documentation describe the learning runtime', asyn
     assert.doesNotMatch(maintenance, /no runtime extension-host entry point/i);
     assert.match(readme, /outcome, fixed evidence code, timestamp and optional worker name/);
     assert.match(readme, /profile also stores inventory choices/i);
+    assert.match(readme, /src="assets\/aro-learning-dashboard\.png"/);
+    const screenshot = await readFile(path.join(root, 'assets/aro-learning-dashboard.png'));
+    assert.deepEqual(screenshot.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
     assert.match(instructions, /extension host also implements the Aro model-learning tools/i);
     assert.doesNotMatch(instructions, /should not gain activation code/i);
 });
@@ -298,6 +311,7 @@ test('sidebar quick controls and status follow saved model policy and outcomes',
     const row = label => rows.find(item => item.label === label);
     assert.equal(row('Scope').description, 'Both');
     assert.equal(row('Priority').description, 'Cloud first');
+    assert.equal(row('Advisor model'), undefined);
     assert.equal(row('Selected models').description, '1 cloud / 1 local');
     assert.equal(row('Unclassified selected').description, '1');
     assert.equal(row('Unrated local').description, '0');
@@ -514,6 +528,12 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.equal(recommendation.modelPriority, null);
     assert.equal(recommendation.recommendedModelId, 'local');
     assert.deepEqual(recommendation.candidates.map(candidate => candidate.id), ['local']);
+    const disconnectedLocal = models.pop();
+    const offlineResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
+    assert.equal(JSON.parse(offlineResult.content[0].value).modelScope, 'local');
+    assert.equal(JSON.parse(offlineResult.content[0].value).recommendedModelId, null);
+    assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'local');
+    models.push(disconnectedLocal);
     response = nextDashboard();
     panel.receive({ type: 'setModelScope', scope: 'both' });
     await response;
@@ -523,10 +543,18 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.equal(dashboard.scope, 'both');
     assert.equal(dashboard.priority, 'local-first');
     assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, 'local');
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'complex').recommendedModelId, 'cloud');
+    const advisorResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'advisor', taskCategory: 'simple' } });
+    assert.equal(JSON.parse(advisorResult.content[0].value).recommendedModelId, 'local');
+    const advisorFallback = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'advisor', taskCategory: 'simple', excludedProviders: ['ollama'] } });
+    assert.equal(JSON.parse(advisorFallback.content[0].value).recommendedModelId, 'cloud');
+    assert.equal(state.has('agentRoster.modelLearning.scorecard.v1'), false);
+    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'complex').recommendedModelId, null);
+    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'complex').eligibleCount, 1);
     const complexResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'complex' } });
     assert.equal(JSON.parse(complexResult.content[0].value).modelPriority, 'local-first');
-    assert.equal(JSON.parse(complexResult.content[0].value).recommendedModelId, 'cloud');
+    assert.equal(JSON.parse(complexResult.content[0].value).recommendedModelId, null);
+    assert.equal(JSON.parse(complexResult.content[0].value).selectionMode, 'fallback');
+    assert.ok(JSON.parse(complexResult.content[0].value).candidates.some(candidate => candidate.id === 'cloud'));
     const temporarilyUnavailable = models.pop();
     const unavailableResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
     assert.equal(JSON.parse(unavailableResult.content[0].value).modelScope, 'cloud');
@@ -599,6 +627,28 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.ok(compact.candidates.length <= 8);
     assert.ok(compact.candidates.some(candidate => candidate.id === compact.recommendedModelId));
     assert.ok(Buffer.byteLength(compactResult.content[0].value) < 3500);
+    response = nextDashboard();
+    panel.receive({ type: 'setModelSelected', id: 'cli', vendor: 'copilotcli', selected: true });
+    await response;
+    const fallbackResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
+        role: 'coding', taskCategory: 'simple', excludedProviders: ['copilot']
+    } });
+    const fallback = JSON.parse(fallbackResult.content[0].value);
+    assert.equal(fallback.modelScope, 'cloud');
+    assert.equal(fallback.recommendedModelId, 'cli');
+    assert.ok(fallback.candidates.every(candidate => candidate.vendor !== 'copilot'));
+    response = nextDashboard();
+    panel.receive({ type: 'setModelScope', scope: 'local' });
+    await response;
+    const localExhausted = await tools.get('aroGetModelRecommendations').invoke({ input: {
+        role: 'coding', taskCategory: 'simple', excludedModels: [{ id: 'local', vendor: 'ollama' }]
+    } });
+    const exhausted = JSON.parse(localExhausted.content[0].value);
+    assert.equal(exhausted.modelScope, 'local');
+    assert.equal(exhausted.recommendedModelId, null);
+    assert.equal(exhausted.candidates.length, 0);
+    const restored = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
+    assert.equal(JSON.parse(restored.content[0].value).recommendedModelId, 'local');
 });
 
 test('inventory webview sends scope, selection, tier and provider changes', async () => {
@@ -632,7 +682,19 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
         { id: 'm', name: 'Model', vendor: 'ollama', kind: 'local', selected: true, localTier: 'unrated', pricing: {} },
         { id: 'c', name: 'Cloud', vendor: 'copilot', kind: 'cloud', selected: true, pricing: { source: 'unpriced', budgetClass: 'unpriced' } },
         { id: 'cli', name: 'CLI', vendor: 'copilotcli', kind: 'cloud', selected: true, pricing: { source: 'vscode', budgetClass: 'high' } }
-    ], providerTypes: { ollama: 'local', copilot: 'cloud', copilotcli: 'cloud' }, lockedProviders: ['copilot', 'copilotcli'], dashboard: [], recordCount: 0, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true } });
+    ], providerTypes: { ollama: 'local', copilot: 'cloud', copilotcli: 'cloud' }, lockedProviders: ['copilot', 'copilotcli'], dashboard: [
+        { role: 'advisor', taskCategory: 'simple', recommendedModelId: 'm', sampleCount: 2, candidates: [{ id: 'm', name: 'Model', vendor: 'ollama', selectionMode: 'learned', successes: 2, failures: 0, score: 0.75, pricing: { source: 'local', budgetClass: 'low' } }] },
+        { role: 'coding', taskCategory: 'simple', recommendedModelId: 'c', sampleCount: 4, candidates: [{ id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'learned', successes: 3, failures: 1, score: 2 / 3, pricing: { source: 'vscode', budgetClass: 'low' } }] },
+        { role: 'coding', taskCategory: 'complex', recommendedModelId: null, eligibleCount: 1, candidates: [] }
+    ], recordCount: 0, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true } });
+    assert.equal(elements.get('recommendations').children[5].children.length, 7);
+    assert.equal(elements.get('recommendations').children[5].children[5].textContent, '3 pass / 1 fail (67%)');
+    assert.equal(elements.get('recommendations').children[5].children[6].textContent, 'Native rate');
+    assert.equal(elements.get('recommendations').children[1].children[5].textContent, '2 pass / 0 fail (75%)');
+    assert.equal(elements.get('recommendations').children[1].children[6].textContent, 'Local (no token charge)');
+    assert.equal(elements.get('recommendations').children[1].children[1].textContent, 'Model (ollama)');
+    assert.equal(elements.get('recommendations').children[7].children[1].textContent, 'No learned recommendation');
+    assert.equal(elements.get('recommendations').children[7].children[5].textContent, 'Needs 2 outcomes per model');
     assert.equal(elements.get('model-priority').disabled, false);
     assert.equal(scopeControls[1].disabled, false);
     assert.equal(scopeControls[2].disabled, false);

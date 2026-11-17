@@ -54,6 +54,20 @@ function recordOutcome(scorecardValue, input) {
     return normalizeScorecard({ records: [...scorecard.records, record] });
 }
 
+function excludeUnavailableModels(models, { excludedModels = [], excludedProviders = [] } = {}) {
+    if (!Array.isArray(excludedModels) || excludedModels.length > 20
+        || excludedModels.some(model => !model || typeof model.id !== 'string' || !model.id || typeof model.vendor !== 'string' || !model.vendor)) {
+        throw new TypeError('Excluded models must be an array of at most 20 model ID and vendor pairs.');
+    }
+    if (!Array.isArray(excludedProviders) || excludedProviders.length > 20
+        || excludedProviders.some(vendor => typeof vendor !== 'string' || !vendor)) {
+        throw new TypeError('Excluded providers must be an array of at most 20 vendor IDs.');
+    }
+    const modelKeys = new Set(excludedModels.map(model => JSON.stringify([model.vendor, model.id])));
+    const providers = new Set(excludedProviders);
+    return models.filter(model => !providers.has(model.vendor) && !modelKeys.has(JSON.stringify([model.vendor, model.id])));
+}
+
 function getModelRecommendations(scorecardValue, { role, taskCategory, models, getPricing, getModelKind, preference }) {
     const scorecard = normalizeScorecard(scorecardValue);
     const historyForContext = scorecard.records.filter(record => record.role === role && record.taskCategory === taskCategory);
@@ -95,13 +109,15 @@ function getModelRecommendations(scorecardValue, { role, taskCategory, models, g
         candidate.selectionMode = candidate.samples < 2 ? 'explore' : 'learned';
     }
     candidates.sort((left, right) => Number(Number.isFinite(right.cost)) - Number(Number.isFinite(left.cost))
+        || (taskCategory === 'complex' ? Number(right.selectionMode === 'learned') - Number(left.selectionMode === 'learned') : 0)
         || (preference ? Number(right.kind === preference) - Number(left.kind === preference) : 0)
         || right.utility - left.utility
         || right.score - left.score
         || left.cost - right.cost
         || left.id.localeCompare(right.id));
 
-    const recommended = candidates.find(candidate => Number.isFinite(candidate.cost));
+    const recommended = candidates.find(candidate => Number.isFinite(candidate.cost)
+        && (taskCategory !== 'complex' || candidate.selectionMode === 'learned'));
     return {
         role,
         taskCategory,
@@ -170,6 +186,7 @@ function getLearningDashboard(scorecardValue, models, getPricing, options = {}) 
             taskCategory,
             sampleCount,
             recommendedModelId: recommendation.recommendedModelId,
+            eligibleCount: recommendation.candidates.filter(candidate => Number.isFinite(candidate.cost)).length,
             candidates: recommendation.candidates.slice(0, 3)
         };
     }));
@@ -184,6 +201,7 @@ function priceOf(pricing) {
 
 module.exports = {
     compactModelRecommendations,
+    excludeUnavailableModels,
     FAILURE_CODES,
     OUTCOMES,
     ROLES,

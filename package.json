@@ -92,7 +92,7 @@
                 "toolReferenceName": "aroGetModelRecommendations",
                 "canBeReferencedInPrompt": true,
                 "userDescription": "Read locally learned model recommendations for a specialist role and task type.",
-                "modelDescription": "Read Aro's profile-local model outcomes and cloud/local scope and priority for the given role and task category. Scores the full eligible inventory and returns a bounded shortlist of the recommendation and eligible alternatives, plus counts and a truncation flag. The shortlist is not exhaustive. Call before selecting a subagent model; never bypass the scope or priority. It does not send prompts to models or change Aro's main model.",
+                "modelDescription": "Read Aro's profile-local model outcomes and cloud/local scope and priority for the given role and task category. Scores the eligible inventory and returns a bounded shortlist and counts. For confirmed unavailability, requery with exact model/vendor pairs or provider IDs excluded; exclusions apply only to this request. The shortlist is not exhaustive. Never bypass scope or priority. Does not read the user's chat model, send prompts to models, or change Aro's main model.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -113,6 +113,41 @@
                                 "standard",
                                 "complex"
                             ]
+                        },
+                        "excludedModels": {
+                            "type": "array",
+                            "maxItems": 20,
+                            "description": "Exact model ID and vendor pairs confirmed unavailable for this dispatch; not persisted.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 300
+                                    },
+                                    "vendor": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 300
+                                    }
+                                },
+                                "required": [
+                                    "id",
+                                    "vendor"
+                                ],
+                                "additionalProperties": false
+                            }
+                        },
+                        "excludedProviders": {
+                            "type": "array",
+                            "maxItems": 20,
+                            "description": "Exact VS Code vendor IDs confirmed unavailable as a whole for this dispatch; not a billing-account identifier.",
+                            "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                            }
                         }
                     },
                     "required": [
