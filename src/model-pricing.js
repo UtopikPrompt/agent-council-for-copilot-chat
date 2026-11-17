@@ -161,6 +161,19 @@ function effectiveModelScope(models, policy) {
     return hasSelectedLocalModel(models, policy) ? policy.scope : 'cloud';
 }
 
+function getInventorySummary(models, policy) {
+    const selected = models.filter(model => isModelSelected(model, policy.localModelVendors, policy.classifications, policy.selections, policy.providerTypes));
+    const localModels = selected.filter(model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes) === 'local');
+    return {
+        scope: effectiveModelScope(models, policy),
+        hasLocal: localModels.length > 0,
+        cloudCount: selected.filter(model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes) === 'cloud').length,
+        localCount: localModels.length,
+        unknownCount: selected.filter(model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes) === 'unknown').length,
+        unratedLocalCount: localModels.filter(model => !['simple', 'standard', 'complex'].includes(policy.localTiers[modelKey(model)])).length
+    };
+}
+
 function selectModels(models, localModelVendors, classifications, scope, options = {}) {
     return models.filter(model => {
         const kind = modelKind(model, localModelVendors, classifications, options.providerTypes);
@@ -189,4 +202,4 @@ function getManagedPricing(model, localModelVendors, classifications, providerTy
     return pricing;
 }
 
-module.exports = { PRICE_SNAPSHOT_DATE, classifyPrice, effectiveModelScope, getManagedPricing, getModelPricing, getSelectionPricing, hasSelectedLocalModel, isCopilotCloudVendor, isModelSelected, modelClassification, modelKey, modelKind, normalizeModelName, selectModels, selectModelVendors };
+module.exports = { PRICE_SNAPSHOT_DATE, classifyPrice, effectiveModelScope, getInventorySummary, getManagedPricing, getModelPricing, getSelectionPricing, hasSelectedLocalModel, isCopilotCloudVendor, isModelSelected, modelClassification, modelKey, modelKind, normalizeModelName, selectModels, selectModelVendors };

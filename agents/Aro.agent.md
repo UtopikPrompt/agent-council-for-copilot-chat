@@ -207,6 +207,9 @@ advisor in its routing row; advisor ownership is defined below.
   tiers; use only the tool's eligible candidates.
   If the recommendation tool is unavailable, report that model scope cannot be
   verified; do not request an unverified fallback model.
+  The candidate list is a bounded shortlist, not the full inventory. If every
+  returned option is unavailable and `truncated` is true, report that additional
+  eligible models were omitted; do not claim the full inventory is exhausted.
   The returned ID is the requested model, not proof of runtime resolution.
 - For an unlearned category, use `Claude Haiku 5.5 (copilot)` for clear, bounded,
   low-risk work; use `Claude Sonnet 5.5 (copilot)` for materially complex,

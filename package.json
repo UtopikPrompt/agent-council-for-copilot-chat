@@ -75,6 +75,14 @@
             {
                 "command": "agentRoster.openModelLearning",
                 "title": "Agent Roster: Open Aro Learning"
+            },
+            {
+                "command": "agentRoster.changeModelScope",
+                "title": "Agent Roster: Change Model Scope"
+            },
+            {
+                "command": "agentRoster.changeModelPriority",
+                "title": "Agent Roster: Change Model Priority"
             }
         ],
         "languageModelTools": [
@@ -84,7 +92,7 @@
                 "toolReferenceName": "aroGetModelRecommendations",
                 "canBeReferencedInPrompt": true,
                 "userDescription": "Read locally learned model recommendations for a specialist role and task type.",
-                "modelDescription": "Read Aro's profile-local model outcome history and current cloud/local model scope and priority for the given role and task category. Returns eligible models with requested model IDs, price tiers, success/failure counts, scores, and an exploration or learned recommendation when available. Call this before selecting a subagent model. Never bypass the returned scope or priority. It does not send prompts to models and does not change Aro's main model.",
+                "modelDescription": "Read Aro's profile-local model outcomes and cloud/local scope and priority for the given role and task category. Scores the full eligible inventory and returns a bounded shortlist of the recommendation and eligible alternatives, plus counts and a truncation flag. The shortlist is not exhaustive. Call before selecting a subagent model; never bypass the scope or priority. It does not send prompts to models or change Aro's main model.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

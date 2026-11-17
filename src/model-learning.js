@@ -111,6 +111,52 @@ function getModelRecommendations(scorecardValue, { role, taskCategory, models, g
     };
 }
 
+function compactModelRecommendations(result) {
+    const eligible = result.candidates.filter(candidate => Number.isFinite(candidate.cost));
+    const selected = [];
+    const keys = new Set();
+    const add = candidate => {
+        if (!candidate) return;
+        const key = JSON.stringify([candidate.vendor, candidate.id]);
+        if (keys.has(key)) return;
+        keys.add(key);
+        selected.push(candidate);
+    };
+    eligible.slice(0, 3).forEach(add);
+    const preferredKind = eligible[0]?.kind;
+    if (preferredKind) add(eligible.find(candidate => candidate.kind && candidate.kind !== preferredKind));
+    for (const kind of ['local', 'cloud']) {
+        add(eligible.find(candidate => candidate.kind === kind && candidate.selectionMode === 'learned'));
+    }
+    for (const modelArgument of ['Claude Haiku 5.5 (copilot)', 'Claude Sonnet 5.5 (copilot)']) {
+        add(eligible.find(candidate => candidate.modelArgument === modelArgument));
+    }
+    const rank = new Map(eligible.map((candidate, index) => [candidate, index]));
+    selected.sort((left, right) => rank.get(left) - rank.get(right));
+    return {
+        role: result.role,
+        taskCategory: result.taskCategory,
+        recommendedModelId: result.recommendedModelId,
+        selectionMode: result.selectionMode,
+        candidates: selected.map(candidate => ({
+            id: candidate.id,
+            name: candidate.name,
+            vendor: candidate.vendor,
+            modelArgument: candidate.modelArgument,
+            kind: candidate.kind,
+            selectionMode: candidate.selectionMode,
+            samples: candidate.samples,
+            successes: candidate.successes,
+            failures: candidate.failures,
+            score: Number(candidate.score.toFixed(3)),
+            pricing: { budgetClass: candidate.pricing.budgetClass, source: candidate.pricing.source }
+        })),
+        eligibleCount: eligible.length,
+        unpricedCount: result.candidates.length - eligible.length,
+        truncated: selected.length < eligible.length
+    };
+}
+
 function getLearningDashboard(scorecardValue, models, getPricing, options = {}) {
     const scorecard = normalizeScorecard(scorecardValue);
     return ROLES.flatMap(role => TASK_CATEGORIES.map(taskCategory => {
@@ -137,6 +183,7 @@ function priceOf(pricing) {
 }
 
 module.exports = {
+    compactModelRecommendations,
     FAILURE_CODES,
     OUTCOMES,
     ROLES,

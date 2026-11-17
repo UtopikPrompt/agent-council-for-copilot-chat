@@ -1,7 +1,8 @@
 const vscode = require('vscode');
 const { randomBytes } = require('node:crypto');
-const { effectiveModelScope, getManagedPricing, hasSelectedLocalModel, isCopilotCloudVendor, isModelSelected, modelKey, modelKind, selectModels } = require('./model-pricing');
+const { effectiveModelScope, getInventorySummary, getManagedPricing, hasSelectedLocalModel, isCopilotCloudVendor, isModelSelected, modelKey, modelKind, selectModels } = require('./model-pricing');
 const {
+    compactModelRecommendations,
     getLearningDashboard,
     getModelRecommendations,
     normalizeScorecard,
@@ -11,6 +12,7 @@ const {
 const LEARNING_STORAGE_KEY = 'agentRoster.modelLearning.scorecard.v1';
 const INVENTORY_STORAGE_KEY = 'agentRoster.modelLearning.inventory.v1';
 const dashboardRefreshers = new Set();
+let inventoryUpdates = Promise.resolve();
 
 const MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
 function getInventoryPolicy(context) {
@@ -29,22 +31,132 @@ function getInventoryPolicy(context) {
     };
 }
 
+function saveInventoryPolicy(context, policy) {
+    return context.globalState.update(INVENTORY_STORAGE_KEY, {
+        scope: policy.scope, priority: policy.priority, classifications: policy.classifications,
+        providerTypes: policy.providerTypes, selections: policy.selections,
+        localTiers: policy.localTiers, manualPriceTiers: policy.manualPriceTiers
+    });
+}
+
+function enqueueInventoryUpdate(update) {
+    const result = inventoryUpdates.then(update);
+    inventoryUpdates = result.catch(() => {});
+    return result;
+}
+
+function refreshLearningViews() {
+    for (const refresh of dashboardRefreshers) void refresh();
+}
+
+function createLearningSidebar(context) {
+    const changes = new vscode.EventEmitter();
+    const refresh = () => changes.fire();
+    dashboardRefreshers.add(refresh);
+    const item = (label, description, icon, command, tooltip) => {
+        const row = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+        row.description = description;
+        row.iconPath = new vscode.ThemeIcon(icon);
+        if (tooltip) row.tooltip = tooltip;
+        if (command) row.command = { command, title: label };
+        return row;
+    };
+    const openDashboard = 'agentRoster.openModelLearning';
+    return {
+        onDidChangeTreeData: changes.event,
+        async getChildren(element) {
+            if (element) return [];
+            const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
+            const rows = [item('Open Aro Learning', '', 'dashboard', openDashboard)];
+            let models;
+            try {
+                models = await selectChatModelsWithTimeout();
+            } catch (error) {
+                rows.push(item('Models unavailable', '', 'warning', openDashboard, error instanceof Error ? error.message : String(error)));
+                rows.push(item('Outcomes', String(scorecard.records.length), 'graph', openDashboard));
+                return rows;
+            }
+            const policy = getInventoryPolicy(context);
+            const summary = getInventorySummary(models, policy);
+            const scopeLabel = { cloud: 'Cloud only', local: 'Local only', both: 'Both' }[summary.scope];
+            rows.push(item('Scope', scopeLabel, 'settings-gear', 'agentRoster.changeModelScope'));
+            rows.push(item('Priority', summary.scope === 'both' ? policy.priority === 'local-first' ? 'Local first' : 'Cloud first' : 'Not applicable', 'arrow-swap', summary.scope === 'both' ? 'agentRoster.changeModelPriority' : undefined));
+            rows.push(item('Selected models', `${summary.cloudCount} cloud / ${summary.localCount} local`, 'checklist', openDashboard));
+            if (summary.unknownCount) rows.push(item('Unclassified selected', String(summary.unknownCount), 'warning', openDashboard));
+            rows.push(item('Unrated local', String(summary.unratedLocalCount), summary.unratedLocalCount ? 'warning' : 'check', openDashboard));
+            rows.push(item('Outcomes', String(scorecard.records.length), 'graph', openDashboard));
+            const last = scorecard.records.at(-1);
+            if (last) {
+                const eligible = selectModels(models, policy.localModelVendors, policy.classifications, summary.scope, { ...policy, taskCategory: last.taskCategory });
+                const result = getModelRecommendations(scorecard, {
+                    role: last.role, taskCategory: last.taskCategory, models: eligible,
+                    getPricing: model => getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers),
+                    getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
+                    preference: summary.scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
+                });
+                const recommended = result.candidates.find(candidate => candidate.id === result.recommendedModelId);
+                rows.push(item(`Latest context: ${last.role} / ${last.taskCategory}`, recommended ? `${recommended.name} (${recommended.vendor})` : 'No eligible model', 'lightbulb', openDashboard, 'Current recommendation for the most recently recorded outcome; not proof of the model used.'));
+            } else {
+                rows.push(item('Latest context', 'No recorded outcomes', 'lightbulb', openDashboard));
+            }
+            return rows;
+        },
+        getTreeItem(row) { return row; },
+        dispose() { dashboardRefreshers.delete(refresh); changes.dispose(); }
+    };
+}
+
+async function changeModelScope(context) {
+    try {
+        const models = await selectChatModelsWithTimeout();
+        const policy = getInventoryPolicy(context);
+        const choices = [{ label: 'Cloud only', value: 'cloud' }];
+        if (hasSelectedLocalModel(models, policy)) choices.push({ label: 'Local only', value: 'local' }, { label: 'Both', value: 'both' });
+        const choice = await vscode.window.showQuickPick(choices, { title: 'Model scope', placeHolder: 'Choose which models Aro may recommend' });
+        if (!choice) return;
+        await enqueueInventoryUpdate(async () => {
+            const currentPolicy = getInventoryPolicy(context);
+            const currentModels = await selectChatModelsWithTimeout();
+            if (choice.value !== 'cloud' && !hasSelectedLocalModel(currentModels, currentPolicy)) throw new Error('Select a local model before using this scope.');
+            currentPolicy.scope = choice.value;
+            await saveInventoryPolicy(context, currentPolicy);
+            refreshLearningViews();
+        });
+    } catch (error) {
+        void vscode.window.showErrorMessage(`Could not change model scope: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+async function changeModelPriority(context) {
+    try {
+        const choice = await vscode.window.showQuickPick([
+            { label: 'Cloud first', value: 'cloud-first' },
+            { label: 'Local first', value: 'local-first' }
+        ], { title: 'Model priority' });
+        if (!choice) return;
+        await enqueueInventoryUpdate(async () => {
+            const policy = getInventoryPolicy(context);
+            const models = await selectChatModelsWithTimeout();
+            if (effectiveModelScope(models, policy) !== 'both') throw new Error('Priority is available only when both scopes are selected.');
+            policy.priority = choice.value;
+            await saveInventoryPolicy(context, policy);
+            refreshLearningViews();
+        });
+    } catch (error) {
+        void vscode.window.showErrorMessage(`Could not change model priority: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
 function activate(context) {
     context.subscriptions.push(registerModelLearningTools(context));
     context.subscriptions.push(vscode.commands.registerCommand('agentRoster.openModelLearning', () => openModelLearning(context)));
-    context.subscriptions.push(vscode.window.registerTreeDataProvider('agentRoster.modelLearning', {
-        getChildren(element) {
-            if (element) return [];
-            const item = new vscode.TreeItem('Open Aro Learning', vscode.TreeItemCollapsibleState.None);
-            item.command = {
-                command: 'agentRoster.openModelLearning',
-                title: 'Open Aro Learning'
-            };
-            return [item];
-        },
-        getTreeItem(item) {
-            return item;
-        }
+    context.subscriptions.push(vscode.commands.registerCommand('agentRoster.changeModelScope', () => changeModelScope(context)));
+    context.subscriptions.push(vscode.commands.registerCommand('agentRoster.changeModelPriority', () => changeModelPriority(context)));
+    const sidebar = createLearningSidebar(context);
+    context.subscriptions.push(sidebar, vscode.window.registerTreeDataProvider('agentRoster.modelLearning', sidebar));
+    if (typeof vscode.lm.onDidChangeChatModels === 'function') context.subscriptions.push(vscode.lm.onDidChangeChatModels(refreshLearningViews));
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
+        if (event.affectsConfiguration('agentRoster.modelLearning.localModelVendors')) refreshLearningViews();
     }));
 }
 
@@ -79,7 +191,7 @@ function registerModelLearningTools(context) {
                 preference: scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
             });
             return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart(JSON.stringify({ ...recommendations, modelScope: scope, modelPriority: scope === 'both' ? policy.priority : null }))
+                new vscode.LanguageModelTextPart(JSON.stringify({ ...compactModelRecommendations(recommendations), modelScope: scope, modelPriority: scope === 'both' ? policy.priority : null }))
             ]);
         }
     });
@@ -97,7 +209,7 @@ function registerModelLearningTools(context) {
                 && record.modelId === input.modelId);
             const successes = matching.filter(record => record.outcome === 'success').length;
             const failures = matching.length - successes;
-            for (const refresh of dashboardRefreshers) refresh();
+            refreshLearningViews();
             return new vscode.LanguageModelToolResult([
                 new vscode.LanguageModelTextPart(JSON.stringify({
                     stored: true,
@@ -130,10 +242,13 @@ function openModelLearning(context) {
     );
 
     let refreshPromise;
+    let refreshRequested = false;
     let inventoryModels = [];
-    let updatePromise = Promise.resolve();
     const refresh = async () => {
-        if (refreshPromise) return refreshPromise;
+        if (refreshPromise) {
+            refreshRequested = true;
+            return refreshPromise;
+        }
         panel.webview.postMessage({ type: 'learningDashboardLoading' });
         refreshPromise = (async () => {
             const policy = getInventoryPolicy(context);
@@ -176,7 +291,13 @@ function openModelLearning(context) {
             });
         })().catch(error => {
             panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
-        }).finally(() => { refreshPromise = undefined; });
+        }).finally(() => {
+            refreshPromise = undefined;
+            if (refreshRequested) {
+                refreshRequested = false;
+                void refresh();
+            }
+        });
         return refreshPromise;
     };
 
@@ -184,7 +305,7 @@ function openModelLearning(context) {
     panel.webview.onDidReceiveMessage(message => {
         if (message.type === 'ready' || message.type === 'refreshLearning') void refresh();
         if (['setModelScope', 'setModelPriority', 'setModelSelected', 'setProviderSelected', 'setProviderType', 'setLocalTier', 'setManualPriceTier'].includes(message.type)) {
-            updatePromise = updatePromise.then(async () => {
+            void enqueueInventoryUpdate(async () => {
                 const policy = getInventoryPolicy(context);
                 if (message.type === 'setModelScope') {
                     if (!['cloud', 'local', 'both'].includes(message.scope)) throw new Error('Invalid model scope.');
@@ -235,9 +356,9 @@ function openModelLearning(context) {
                 if (['setModelSelected', 'setProviderSelected', 'setProviderType'].includes(message.type) && !hasSelectedLocalModel(inventoryModels, policy)) {
                     policy.scope = 'cloud';
                 }
-                await context.globalState.update(INVENTORY_STORAGE_KEY, { scope: policy.scope, priority: policy.priority, classifications: policy.classifications, providerTypes: policy.providerTypes, selections: policy.selections, localTiers: policy.localTiers, manualPriceTiers: policy.manualPriceTiers });
+                await saveInventoryPolicy(context, policy);
                 if (refreshPromise) await refreshPromise;
-                for (const refreshDashboard of dashboardRefreshers) void refreshDashboard();
+                refreshLearningViews();
             }).catch(error => {
                 panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
             });

@@ -47,6 +47,7 @@ test('Aro learns model outcomes by role and task using evidence-gated tools', as
     assert.match(modelSelection, /`learned` or an eligible `explore`/);
     assert.match(modelSelection, /never bypass the selected model scope/);
     assert.match(modelSelection, /aroRecordModelOutcome/);
+    assert.match(modelSelection, /bounded shortlist/);
     assert.match(modelSelection, /Do not\s+score routing mistakes,\s+missing input,\s+unsupported models, tool failures/);
     assert.ok(modelSelection.includes('Claude Haiku 5.5 (copilot)'));
     assert.ok(modelSelection.includes('clear, bounded'));
@@ -233,6 +234,156 @@ test('Aro surfaces evidence-based roster gaps without automatic filing', async (
     assert.match(body, /if filing tools or a verified destination\s+are unavailable, provide the draft/);
 });
 
+test('sidebar quick controls and status follow saved model policy and outcomes', async () => {
+    const tools = new Map();
+    const commands = new Map();
+    const state = new Map();
+    let models = [
+        { id: 'cloud', name: 'Cloud', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'local', name: 'Local', vendor: 'ollama' },
+        { id: 'unknown', name: 'Unknown', vendor: 'other' }
+    ];
+    state.set('agentRoster.modelLearning.inventory.v1', {
+        scope: 'both', priority: 'cloud-first', providerTypes: { ollama: 'local' },
+        selections: { '["other","unknown"]': true },
+        localTiers: { '["ollama","local"]': 'standard' }
+    });
+    let sidebar;
+    let nextChoice;
+    let choices;
+    let refreshes = 0;
+    let failDiscovery = false;
+    const vscode = {
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() { refreshes += 1; } dispose() {} },
+        TreeItem: class { constructor(label) { this.label = label; } },
+        TreeItemCollapsibleState: { None: 0 },
+        ThemeIcon: class { constructor(id) { this.id = id; } },
+        lm: {
+            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
+            selectChatModels: async () => { if (failDiscovery) throw new Error('provider unavailable'); return models; }
+        },
+        workspace: { getConfiguration: () => ({ get: () => [] }), onDidChangeConfiguration: () => ({ dispose() {} }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        window: {
+            registerTreeDataProvider: (name, provider) => { sidebar = provider; return { dispose() {} }; },
+            showQuickPick: async items => { choices = items; return items.find(item => item.value === nextChoice); },
+            showErrorMessage: message => { throw new Error(message); }
+        },
+        LanguageModelTextPart: class { constructor(value) { this.value = value; } },
+        LanguageModelToolResult: class { constructor(content) { this.content = content; } }
+    };
+    const localRequire = createRequire(path.join(root, 'src/extension.js'));
+    const module = { exports: {} };
+    vm.runInNewContext(await readFile(path.join(root, 'src/extension.js'), 'utf8'), {
+        module, exports: module.exports,
+        require: name => name === 'vscode' ? vscode : localRequire(name), setTimeout, clearTimeout
+    });
+    module.exports.activate({
+        subscriptions: [],
+        globalState: { get: key => state.get(key), update: async (key, value) => { state.set(key, value); } }
+    });
+    let rows = await sidebar.getChildren();
+    const row = label => rows.find(item => item.label === label);
+    assert.equal(row('Scope').description, 'Both');
+    assert.equal(row('Priority').description, 'Cloud first');
+    assert.equal(row('Selected models').description, '1 cloud / 1 local');
+    assert.equal(row('Unclassified selected').description, '1');
+    assert.equal(row('Unrated local').description, '0');
+    assert.equal(row('Outcomes').description, '0');
+    assert.equal(row('Latest context').description, 'No recorded outcomes');
+    nextChoice = 'local';
+    await commands.get('agentRoster.changeModelScope')();
+    rows = await sidebar.getChildren();
+    assert.equal(row('Scope').description, 'Local only');
+    assert.equal(row('Priority').command, undefined);
+    nextChoice = 'both';
+    await commands.get('agentRoster.changeModelScope')();
+    nextChoice = 'local-first';
+    await commands.get('agentRoster.changeModelPriority')();
+    assert.equal(state.get('agentRoster.modelLearning.inventory.v1').priority, 'local-first');
+    await tools.get('aroRecordModelOutcome').invoke({ input: {
+        role: 'coding', taskCategory: 'simple', modelId: 'local', outcome: 'success', evidenceCode: 'acceptance_passed'
+    } });
+    rows = await sidebar.getChildren();
+    assert.equal(row('Priority').description, 'Local first');
+    assert.equal(row('Outcomes').description, '1');
+    assert.equal(row('Latest context: coding / simple').description, 'Local (ollama)');
+    assert.ok(refreshes >= 4);
+    models = models.filter(model => model.vendor !== 'ollama');
+    nextChoice = 'local';
+    await commands.get('agentRoster.changeModelScope')();
+    assert.deepEqual(Array.from(choices, choice => choice.value), ['cloud']);
+    failDiscovery = true;
+    rows = await sidebar.getChildren();
+    assert.match(row('Models unavailable').tooltip, /provider unavailable/);
+    assert.equal(row('Outcomes').description, '1');
+});
+
+test('sidebar scope changes refresh a dashboard already loading', { timeout: 3000 }, async () => {
+    const commands = new Map();
+    const state = new Map();
+    state.set('agentRoster.modelLearning.inventory.v1', {
+        scope: 'both', priority: 'cloud-first', providerTypes: { ollama: 'local' }
+    });
+    const models = [{ id: 'cloud', vendor: 'copilot' }, { id: 'local', vendor: 'ollama' }];
+    let releaseDiscovery;
+    const discoveryGate = new Promise(resolve => { releaseDiscovery = resolve; });
+    let delayDiscovery = true;
+    let resolveUpdated;
+    const updated = new Promise(resolve => { resolveUpdated = resolve; });
+    const messages = [];
+    const panel = {
+        webview: {
+            cspSource: 'test', asWebviewUri: uri => uri,
+            onDidReceiveMessage: handler => { panel.receive = handler; },
+            postMessage: message => {
+                if (message.type === 'learningDashboard') {
+                    messages.push(message.scope);
+                    if (message.scope === 'local') resolveUpdated();
+                }
+            }
+        },
+        onDidDispose() {}
+    };
+    const vscode = {
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        TreeItem: class { constructor(label) { this.label = label; } },
+        TreeItemCollapsibleState: { None: 0 }, ThemeIcon: class {},
+        lm: {
+            registerTool: () => ({ dispose() {} }),
+            selectChatModels: async () => {
+                if (delayDiscovery) { delayDiscovery = false; await discoveryGate; }
+                return models;
+            }
+        },
+        workspace: { getConfiguration: () => ({ get: () => [] }), onDidChangeConfiguration: () => ({ dispose() {} }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        window: {
+            registerTreeDataProvider: () => ({ dispose() {} }), createWebviewPanel: () => panel,
+            showQuickPick: async choices => choices.find(choice => choice.value === 'local'),
+            showErrorMessage: message => { throw new Error(message); }
+        },
+        Uri: { joinPath: (...parts) => parts.join('/') }, ViewColumn: { One: 1 }
+    };
+    const localRequire = createRequire(path.join(root, 'src/extension.js'));
+    const module = { exports: {} };
+    vm.runInNewContext(await readFile(path.join(root, 'src/extension.js'), 'utf8'), {
+        module, exports: module.exports,
+        require: name => name === 'vscode' ? vscode : localRequire(name), setTimeout, clearTimeout
+    });
+    module.exports.activate({
+        subscriptions: [], extensionUri: 'extension',
+        globalState: { get: key => state.get(key), update: async (key, value) => { state.set(key, value); } }
+    });
+    commands.get('agentRoster.openModelLearning')();
+    panel.receive({ type: 'ready' });
+    await commands.get('agentRoster.changeModelScope')();
+    assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'local');
+    releaseDiscovery();
+    await updated;
+    assert.deepEqual(messages, ['both', 'local']);
+});
+
 test('inventory changes persist and affect dashboard and recommendation tool', async () => {
     const tools = new Map();
     const commands = new Map();
@@ -251,11 +402,15 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     ];
     let panel;
     const vscode = {
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        TreeItem: class { constructor(label) { this.label = label; } },
+        TreeItemCollapsibleState: { None: 0 },
+        ThemeIcon: class { constructor(id) { this.id = id; } },
         lm: {
             registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
             selectChatModels: async () => models
         },
-        workspace: { getConfiguration: () => ({ get: () => [] }) },
+        workspace: { getConfiguration: () => ({ get: () => [] }), onDidChangeConfiguration: () => ({ dispose() {} }) },
         commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
         window: {
             registerTreeDataProvider: () => ({ dispose() {} }),
@@ -421,6 +576,17 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     panel.receive({ type: 'setManualPriceTier', id: 'unpriced', vendor: 'copilot', tier: 'unpriced' });
     dashboard = await response;
     assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, null);
+    models.push(...Array.from({ length: 60 }, (_, index) => ({
+        id: `additional-${index}`, name: `Additional ${index}`, vendor: 'copilot', inputCost: 10, outputCost: 50
+    })));
+    const compactResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
+    const compact = JSON.parse(compactResult.content[0].value);
+    assert.equal(compact.eligibleCount, 60);
+    assert.equal(compact.unpricedCount, 1);
+    assert.equal(compact.truncated, true);
+    assert.ok(compact.candidates.length <= 8);
+    assert.ok(compact.candidates.some(candidate => candidate.id === compact.recommendedModelId));
+    assert.ok(Buffer.byteLength(compactResult.content[0].value) < 3500);
 });
 
 test('inventory webview sends scope, selection, tier and provider changes', async () => {

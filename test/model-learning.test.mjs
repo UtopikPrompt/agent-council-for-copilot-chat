@@ -3,8 +3,75 @@ import test from 'node:test';
 import learningModule from '../src/model-learning.js';
 import pricingModule from '../src/model-pricing.js';
 
-const { emptyScorecard, getLearningDashboard, getModelRecommendations, normalizeScorecard, recordOutcome } = learningModule;
+const { compactModelRecommendations, emptyScorecard, getLearningDashboard, getModelRecommendations, normalizeScorecard, recordOutcome } = learningModule;
 const getPricing = model => ({ inputCost: model.inputCost, outputCost: model.outputCost, budgetClass: model.budgetClass });
+
+test('compact recommendations retain the winner, learned and configured fallbacks without returning the full inventory', () => {
+    const models = Array.from({ length: 60 }, (_, index) => ({
+        id: `local-${index}`, name: `Local ${index}`, vendor: 'ollama', inputCost: 0, outputCost: 0
+    }));
+    models.push(
+        { id: 'haiku', name: 'Claude Haiku 5.5', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'sonnet', name: 'Claude Sonnet 5.5', vendor: 'copilot', inputCost: 200, outputCost: 1000 },
+        { id: 'unpriced', name: 'Unknown', vendor: 'copilot' }
+    );
+    let scorecard = emptyScorecard();
+    for (let index = 0; index < 2; index += 1) {
+        scorecard = recordOutcome(scorecard, { role: 'coding', taskCategory: 'simple', modelId: 'local-59', outcome: 'failure', evidenceCode: 'acceptance_failed' });
+    }
+    const result = getModelRecommendations(scorecard, {
+        role: 'coding', taskCategory: 'simple', models, getPricing,
+        getModelKind: model => model.vendor === 'ollama' ? 'local' : 'cloud', preference: 'local'
+    });
+    const compact = compactModelRecommendations(result);
+    assert.equal(compact.recommendedModelId, result.recommendedModelId);
+    assert.equal(compact.candidates[0].id, result.recommendedModelId);
+    assert.ok(compact.candidates.some(candidate => candidate.id === 'local-59'));
+    assert.ok(compact.candidates.some(candidate => candidate.id === 'haiku'));
+    assert.ok(compact.candidates.some(candidate => candidate.id === 'sonnet'));
+    assert.equal(compact.candidates.some(candidate => candidate.id === 'unpriced'), false);
+    assert.ok(compact.candidates.length <= 8);
+    assert.equal(compact.eligibleCount, 62);
+    assert.equal(compact.unpricedCount, 1);
+    assert.equal(compact.truncated, true);
+    const originalRanks = compact.candidates.map(candidate => result.candidates.findIndex(original => original.id === candidate.id && original.vendor === candidate.vendor));
+    assert.deepEqual(originalRanks, [...originalRanks].sort((left, right) => left - right));
+    assert.ok(Buffer.byteLength(JSON.stringify(compact)) < 3500);
+    assert.ok(Buffer.byteLength(JSON.stringify(compact)) < Buffer.byteLength(JSON.stringify(result)) / 3);
+});
+
+test('compact recommendations report an empty or unpriced inventory honestly', () => {
+    const result = getModelRecommendations(emptyScorecard(), {
+        role: 'coding', taskCategory: 'simple', models: [{ id: 'unknown', vendor: 'copilot' }], getPricing
+    });
+    const compact = compactModelRecommendations(result);
+    assert.equal(compact.recommendedModelId, null);
+    assert.equal(compact.selectionMode, 'fallback');
+    assert.equal(compact.eligibleCount, 0);
+    assert.equal(compact.unpricedCount, 1);
+    assert.deepEqual(compact.candidates, []);
+    assert.equal(compact.truncated, false);
+});
+
+test('sidebar inventory summary counts only selected cloud and unrated local models', () => {
+    const models = [
+        { id: 'cloud', vendor: 'copilot' },
+        { id: 'cli', vendor: 'copilotcli' },
+        { id: 'local', vendor: 'ollama' },
+        { id: 'disabled', vendor: 'ollama' }
+    ];
+    const policy = {
+        scope: 'both', localModelVendors: ['ollama'], classifications: {}, providerTypes: {},
+        selections: { [pricingModule.modelKey(models[3])]: false }, localTiers: {}
+    };
+    assert.deepEqual(pricingModule.getInventorySummary(models, policy), {
+        scope: 'both', hasLocal: true, cloudCount: 2, localCount: 1, unknownCount: 0, unratedLocalCount: 1
+    });
+    policy.localTiers[pricingModule.modelKey(models[2])] = 'standard';
+    assert.equal(pricingModule.getInventorySummary(models, policy).unratedLocalCount, 0);
+    policy.selections[pricingModule.modelKey(models[2])] = false;
+    assert.equal(pricingModule.getInventorySummary(models, policy).scope, 'cloud');
+});
 
 test('Copilot and Copilot CLI remain cloud despite stored local overrides', () => {
     for (const vendor of ['copilot', 'copilotcli']) {
