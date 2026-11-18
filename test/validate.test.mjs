@@ -31,7 +31,7 @@ test('validates the complete council and all extracted workflow consumers', asyn
     assert.deepEqual(await validate(), { agents: 49, skills: 10 });
 });
 
-test('Aro learns model outcomes by role and task using evidence-gated tools', async () => {
+test('Aro learns model outcomes by contextual activity, domain, and difficulty', async () => {
     const { metadata, body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
     const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     const extensionId = `${manifest.publisher}.${manifest.name}`;
@@ -42,10 +42,12 @@ test('Aro learns model outcomes by role and task using evidence-gated tools', as
     assert.ok(modelSelection, 'Missing model selection guidance');
     assert.match(modelSelection, /aroGetModelRecommendations/);
     assert.match(modelSelection, /selectionMode/);
+    assert.match(modelSelection, /`selectionMode` is `manual`/);
+    assert.match(modelSelection, /`manual-unavailable`/);
     assert.match(modelSelection, /`selectionMode` is `fallback`/);
     assert.match(modelSelection, /use `recommendedModelId`\s+to find its candidate/);
     assert.match(modelSelection, /exact `modelArgument` when\s+supported/);
-    assert.match(modelSelection, /`learned` or an eligible `explore`/);
+    assert.match(modelSelection, /`learned`, `pooled`, or an eligible `explore`/);
     assert.match(modelSelection, /never bypass the selected model scope/);
     assert.match(modelSelection, /aroRecordModelOutcome/);
     assert.match(modelSelection, /bounded shortlist/);
@@ -189,6 +191,11 @@ test('Aro model learning is automatic, persistent, and has no manual benchmark U
         assert.equal(tool.canBeReferencedInPrompt, true);
         assert.equal(tool.toolReferenceName, name);
     }
+    const readTool = manifest.contributes.languageModelTools.find(entry => entry.name === 'aroGetModelRecommendations');
+    const recordTool = manifest.contributes.languageModelTools.find(entry => entry.name === 'aroRecordModelOutcome');
+    assert.deepEqual(readTool.inputSchema.required, ['activity', 'domain', 'difficulty']);
+    assert.deepEqual(recordTool.inputSchema.required, ['activity', 'domain', 'difficulty', 'modelId', 'outcome', 'evidenceCode']);
+    assert.equal(recordTool.inputSchema.properties.metrics.additionalProperties, false);
     const aro = await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8');
     const extensionId = `${manifest.publisher}.${manifest.name}`;
     for (const name of ['aroGetModelRecommendations', 'aroRecordModelOutcome']) {
@@ -203,13 +210,13 @@ test('Aro model learning is automatic, persistent, and has no manual benchmark U
     assert.match(extension, /vscode\.lm\.registerTool\('aroGetModelRecommendations'/);
     assert.match(extension, /vscode\.lm\.registerTool\('aroRecordModelOutcome'/);
     assert.match(extension, /context\.globalState\.update\(LEARNING_STORAGE_KEY/);
-    assert.match(extension, /getLearningDashboard/);
+    assert.match(extension, /getContextualLearningDashboard/);
     assert.equal((extension.match(/img-src \$\{webview\.cspSource\}/g) || []).length, 1);
     assert.doesNotMatch(extension, /message\.type === 'benchmark'/);
     assert.doesNotMatch(extension, /model\.sendRequest/);
     assert.match(extension, /getManagedPricing\(model, policy\.localModelVendors, policy\.classifications, policy\.providerTypes, policy\.manualPriceTiers\)/);
     assert.match(extension, /selectModels\(availableModels, policy\.localModelVendors, policy\.classifications, scope/);
-    assert.match(extension, /getModelsForTask: taskCategory => selectModels\(summaries/);
+    assert.match(extension, /getModelsForTask: difficulty => selectModels\(summaries/);
     assert.deepEqual(manifest.contributes.configuration.properties['agentRoster.modelLearning.localModelVendors'].default, []);
     const handlerRegistration = extension.indexOf('panel.webview.onDidReceiveMessage(message =>', extension.indexOf('function openModelLearning'));
     const htmlAssignment = extension.indexOf('panel.webview.html = getLearningHtml', extension.indexOf('function openModelLearning'));
@@ -217,14 +224,29 @@ test('Aro model learning is automatic, persistent, and has no manual benchmark U
     assert.match(extension, /selectChatModelsWithTimeout/);
     assert.match(extension, /MODEL_DISCOVERY_TIMEOUT_MS = 15_000/);
     assert.match(extension, /id="model-count"/);
+    assert.match(extension, /id="activity-tabs" class="activity-tabs" role="tablist"/);
+    assert.match(extension, /id="domain-tabs" class="activity-tabs" role="tablist"/);
+    assert.match(extension, /id="view-tabs" role="tablist"/);
+    assert.match(extension, /id="inventory-view" class="view-panel"/);
+    assert.ok(extension.indexOf('id="domain-filter-label"') < extension.indexOf('id="activity-filter-label"'));
+    assert.match(extension, /<th>Provider<\/th><th>Model selection<\/th><th>Type<\/th><\/tr><\/thead><tbody id="providers">/);
+    assert.doesNotMatch(extension, /provider-settings|provider-types|provider-controls/);
+    const recommendationsViewIndex = extension.indexOf('id="recommendations-view"');
+    const inventoryViewIndex = extension.indexOf('id="inventory-view"');
+    const modelScopeIndex = extension.indexOf('id="model-scope"');
+    assert.ok(modelScopeIndex > recommendationsViewIndex && modelScopeIndex < inventoryViewIndex);
+    assert.doesNotMatch(extension, /id="context-difficulty"/);
+    assert.match(extension, /id="context-count"/);
     assert.doesNotMatch(extension, /class="advisor-model"/);
-    assert.match(extension, /<th>Role \/ task<\/th><th>Recommended model<\/th><th>Price tier<\/th><th>Selection mode<\/th><th>Outcomes<\/th><th>Observed quality<\/th><th>Price source<\/th>/);
+    assert.match(extension, /id="context-activity-heading">Activity<\/th><th id="context-domain-heading">Domain<\/th><th id="context-difficulty-heading">Difficulty<\/th><th>Recommended model<\/th><th>Evidence<\/th><th>Price<\/th>/);
     const dashboard = await readFile(path.join(root, 'media/model-learning-dashboard.js'), 'utf8');
     assert.match(dashboard, /refreshLearning/);
     assert.match(dashboard, /vscode\.postMessage\(\{ type: 'ready' \}\)/);
     assert.match(dashboard, /recommendedModelId/);
     assert.doesNotMatch(dashboard, /toggle-inventory/);
     assert.doesNotMatch(dashboard, /sendRequest|benchmark|textarea|scorecard.*set/i);
+    const dashboardStyles = await readFile(path.join(root, 'media/model-learning-dashboard.css'), 'utf8');
+    assert.match(dashboardStyles, /\.context-controls\s*\{[^}]*flex-direction:\s*column/);
 });
 
 test('maintenance and privacy documentation describe the learning runtime', async () => {
@@ -440,6 +462,9 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
         classifications: { '["copilotcli","cli"]': 'local' },
         selections: { '["copilotcli","cli"]': false }
     });
+    state.set('agentRoster.modelLearning.manualSelections.v1', [{
+        activity: 'operate', domain: 'github-workflow', difficulty: 'standard', modelId: 'cloud', vendor: 'copilot'
+    }]);
     const models = [
         { id: 'cloud', name: 'Cloud', vendor: 'copilot', inputCost: 10, outputCost: 50 },
         { id: 'unpriced', name: 'Unpriced model', vendor: 'copilot' },
@@ -447,6 +472,7 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
         { id: 'local', name: 'Local', vendor: 'ollama' }
     ];
     let panel;
+    let quickPickChoices = [];
     const vscode = {
         EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
         TreeItem: class { constructor(label) { this.label = label; } },
@@ -460,6 +486,10 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
         commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
         window: {
             registerTreeDataProvider: () => ({ dispose() {} }),
+            showQuickPick: async choices => {
+                quickPickChoices = choices;
+                return choices.find(choice => choice.modelId === 'cloud');
+            },
             createWebviewPanel: () => {
                 panel = {
                     webview: {
@@ -504,6 +534,13 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.equal(dashboard.providerTypes.copilotcli, 'cloud');
     assert.ok(dashboard.lockedProviders.includes('copilot'));
     assert.ok(dashboard.lockedProviders.includes('copilotcli'));
+    const migratedPin = dashboard.dashboard.find(row => row.activity === 'operate'
+        && row.domain === 'documentation-governance' && row.difficulty === 'standard');
+    assert.equal(migratedPin.manualSelection.modelId, 'cloud');
+    const migratedPinResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
+        activity: 'operate', domain: 'documentation-governance', difficulty: 'standard'
+    } });
+    assert.equal(JSON.parse(migratedPinResult.content[0].value).selectionMode, 'manual');
     for (const vendor of ['copilot', 'copilotcli']) {
         response = nextDashboard();
         panel.receive({ type: 'setProviderType', vendor, kind: 'local' });
@@ -532,7 +569,25 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     panel.receive({ type: 'setModelScope', scope: 'both' });
     dashboard = await response;
     assert.equal(dashboard.scope, 'both');
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, 'cloud');
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'cloud');
+    response = nextDashboard();
+    panel.receive({ type: 'chooseManualModel', activity: 'implement', domain: 'coding', difficulty: 'simple' });
+    dashboard = await response;
+    assert.ok(quickPickChoices.some(choice => choice.modelId === 'cloud' && choice.vendor === 'copilot'));
+    const pinnedRow = dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple');
+    assert.equal(pinnedRow.manualSelection.modelId, 'cloud');
+    assert.equal(pinnedRow.selectionMode, 'manual');
+    const contextualManualResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
+        activity: 'implement', domain: 'coding', difficulty: 'simple'
+    } });
+    assert.equal(JSON.parse(contextualManualResult.content[0].value).selectionMode, 'manual');
+    assert.equal(JSON.parse(contextualManualResult.content[0].value).recommendedModelId, 'cloud');
+    response = nextDashboard();
+    panel.receive({ type: 'useLearnedModel', activity: 'implement', domain: 'coding', difficulty: 'simple' });
+    dashboard = await response;
+    assert.equal(state.get('agentRoster.modelLearning.manualSelections.v1').some(selection => selection.activity === 'implement'
+        && selection.domain === 'coding' && selection.difficulty === 'simple'), false);
+    assert.notEqual(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').selectionMode, 'manual');
     response = nextDashboard();
     panel.receive({ type: 'setLocalTier', id: 'local', vendor: 'ollama', tier: 'standard' });
     dashboard = await response;
@@ -541,7 +596,7 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     panel.receive({ type: 'setModelScope', scope: 'local' });
     dashboard = await response;
     assert.equal(dashboard.scope, 'local');
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, 'local');
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'local');
     const result = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
     const recommendation = JSON.parse(result.content[0].value);
     assert.equal(recommendation.modelScope, 'local');
@@ -562,14 +617,31 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     dashboard = await response;
     assert.equal(dashboard.scope, 'both');
     assert.equal(dashboard.priority, 'local-first');
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, 'local');
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'local');
     const advisorResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'advisor', taskCategory: 'simple' } });
     assert.equal(JSON.parse(advisorResult.content[0].value).recommendedModelId, 'local');
     const advisorFallback = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'advisor', taskCategory: 'simple', excludedProviders: ['ollama'] } });
     assert.equal(JSON.parse(advisorFallback.content[0].value).recommendedModelId, 'cloud');
     assert.equal(state.has('agentRoster.modelLearning.scorecard.v1'), false);
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'complex').recommendedModelId, null);
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'complex').eligibleCount, 1);
+    const contextualResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
+        activity: 'advise', domain: 'coding', difficulty: 'standard'
+    } });
+    const contextualRecommendation = JSON.parse(contextualResult.content[0].value);
+    assert.match(contextualRecommendation.callId, /^[0-9a-f]{32}$/);
+    const contextualOutcome = await tools.get('aroRecordModelOutcome').invoke({ input: {
+        activity: 'advise', domain: 'coding', difficulty: 'standard', agent: 'CodeDomainAdvisor',
+        callId: contextualRecommendation.callId, modelId: 'local', outcome: 'success', evidenceCode: 'acceptance_passed',
+        metrics: { durationMs: 900, costUsd: 0.01 }
+    } });
+    assert.equal(JSON.parse(contextualOutcome.content[0].value).activity, 'advise');
+    assert.equal(state.get('agentRoster.modelLearning.scorecard.v1').records.at(-1).metrics.durationMs, 900);
+    assert.equal(state.get('agentRoster.modelLearning.scorecard.v1').records.at(-1).callId, contextualRecommendation.callId);
+    assert.equal(contextualRecommendation.activity, 'advise');
+    assert.equal(contextualRecommendation.domain, 'coding');
+    assert.equal(contextualRecommendation.difficulty, 'standard');
+    assert.equal(contextualRecommendation.recommendedModelId, 'local');
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'complex').recommendedModelId, null);
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'complex').eligibleCount, 1);
     const complexResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'complex' } });
     assert.equal(JSON.parse(complexResult.content[0].value).modelPriority, 'local-first');
     assert.equal(JSON.parse(complexResult.content[0].value).recommendedModelId, null);
@@ -584,7 +656,7 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     panel.receive({ type: 'setModelPriority', priority: 'cloud-first' });
     dashboard = await response;
     assert.equal(dashboard.priority, 'cloud-first');
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, 'cloud');
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'cloud');
     const cloudResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
     assert.equal(JSON.parse(cloudResult.content[0].value).recommendedModelId, 'cloud');
     response = nextDashboard();
@@ -596,7 +668,7 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.equal(dashboard.models.find(model => model.id === 'local').selected, false);
     assert.equal(dashboard.scope, 'cloud');
     assert.equal(dashboard.hasSelectedLocalModel, false);
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, 'cloud');
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'cloud');
     const afterRemoval = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
     assert.equal(JSON.parse(afterRemoval.content[0].value).modelScope, 'cloud');
     assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'cloud');
@@ -618,7 +690,7 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     panel.receive({ type: 'setModelScope', scope: 'both' });
     dashboard = await response;
     assert.equal(dashboard.priority, 'cloud-first');
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, 'cloud');
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'cloud');
     response = nextDashboard();
     panel.receive({ type: 'setManualPriceTier', id: 'unpriced', vendor: 'copilot', tier: 'medium' });
     dashboard = await response;
@@ -631,11 +703,11 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     response = nextDashboard();
     panel.receive({ type: 'setModelSelected', id: 'cloud', vendor: 'copilot', selected: false });
     dashboard = await response;
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, 'unpriced');
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'unpriced');
     response = nextDashboard();
     panel.receive({ type: 'setManualPriceTier', id: 'unpriced', vendor: 'copilot', tier: 'unpriced' });
     dashboard = await response;
-    assert.equal(dashboard.dashboard.find(row => row.role === 'coding' && row.taskCategory === 'simple').recommendedModelId, null);
+    assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, null);
     models.push(...Array.from({ length: 60 }, (_, index) => ({
         id: `additional-${index}`, name: `Additional ${index}`, vendor: 'copilot', inputCost: 10, outputCost: 50
     })));
@@ -676,15 +748,17 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
     const messages = [];
     let receive;
     class Element {
-        constructor() { this.children = []; this.listeners = {}; this.value = ''; }
+        constructor() { this.children = []; this.listeners = {}; this.value = ''; this.dataset = {}; this.attributes = {}; }
         addEventListener(type, handler) { this.listeners[type] = handler; }
-        setAttribute() {}
+        setAttribute(name, value) { this.attributes[name] = value; }
+        focus() { this.focused = true; }
         append(...children) { this.children.push(...children); }
         replaceChildren() { this.children = []; }
     }
-    for (const id of ['models', 'model-search', 'model-count', 'recommendations', 'learning-status', 'learning-message', 'refresh-learning', 'model-scope', 'model-priority', 'provider-controls', 'provider-types']) {
+    for (const id of ['models', 'model-search', 'model-count', 'model-count-label', 'recommendations', 'recommendations-panel', 'recommendations-view', 'inventory-view', 'view-tabs', 'learning-status', 'learning-message', 'refresh-learning', 'model-scope', 'model-priority', 'providers', 'activity-tabs', 'domain-tabs', 'context-count', 'context-activity-heading', 'context-domain-heading', 'context-difficulty-heading']) {
         elements.set(id, new Element());
     }
+    elements.get('view-tabs').append(...['recommendations', 'inventory'].map(view => Object.assign(new Element(), { id: `view-tab-${view}`, dataset: { view } })));
     const scopeControls = ['cloud', 'local', 'both'].map(value => Object.assign(new Element(), { name: 'model-scope', value }));
     const document = {
         getElementById: id => elements.get(id),
@@ -698,23 +772,73 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
         acquireVsCodeApi: () => ({ postMessage: message => messages.push(JSON.parse(JSON.stringify(message))) })
     });
     assert.equal(messages[0].type, 'ready');
+    assert.equal(elements.get('recommendations-view').hidden, false);
+    assert.equal(elements.get('inventory-view').hidden, true);
+    assert.equal(elements.get('activity-tabs').children.length, 7);
+    assert.equal(elements.get('activity-tabs').children[0].textContent, 'All');
+    assert.equal(elements.get('domain-tabs').children.length, 6);
+    assert.equal(elements.get('domain-tabs').children[0].textContent, 'All');
     receive({ data: { type: 'learningDashboard', models: [
         { id: 'm', name: 'Model', vendor: 'ollama', kind: 'local', selected: true, localTier: 'unrated', pricing: {} },
         { id: 'c', name: 'Cloud', vendor: 'copilot', kind: 'cloud', selected: true, pricing: { source: 'unpriced', budgetClass: 'unpriced' } },
         { id: 'cli', name: 'CLI', vendor: 'copilotcli', kind: 'cloud', selected: true, pricing: { source: 'vscode', budgetClass: 'high' } }
     ], providerTypes: { ollama: 'local', copilot: 'cloud', copilotcli: 'cloud' }, lockedProviders: ['copilot', 'copilotcli'], dashboard: [
-        { role: 'advisor', taskCategory: 'simple', recommendedModelId: 'm', sampleCount: 2, candidates: [{ id: 'm', name: 'Model', vendor: 'ollama', selectionMode: 'learned', successes: 2, failures: 0, score: 0.75, pricing: { source: 'local', budgetClass: 'low' } }] },
-        { role: 'coding', taskCategory: 'simple', recommendedModelId: 'c', sampleCount: 4, candidates: [{ id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'learned', successes: 3, failures: 1, score: 2 / 3, pricing: { source: 'vscode', budgetClass: 'low' } }] },
-        { role: 'coding', taskCategory: 'complex', recommendedModelId: null, eligibleCount: 1, candidates: [] }
-    ], recordCount: 0, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true } });
-    assert.equal(elements.get('recommendations').children[5].children.length, 7);
-    assert.equal(elements.get('recommendations').children[5].children[5].textContent, '3 pass / 1 fail (67%)');
-    assert.equal(elements.get('recommendations').children[5].children[6].textContent, 'Native rate');
-    assert.equal(elements.get('recommendations').children[1].children[5].textContent, '2 pass / 0 fail (75%)');
-    assert.equal(elements.get('recommendations').children[1].children[6].textContent, 'Local (no token charge)');
-    assert.equal(elements.get('recommendations').children[1].children[1].textContent, 'Model (ollama)');
-    assert.equal(elements.get('recommendations').children[7].children[1].textContent, 'No learned recommendation');
-    assert.equal(elements.get('recommendations').children[7].children[5].textContent, 'Needs 2 outcomes per model');
+        { activity: 'implement', domain: 'coding', difficulty: 'simple', recommendedModelId: 'c', recommendedVendor: 'copilot', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', sampleCount: 4, pooledSampleCount: 2, selectionMode: 'pooled', candidates: [{ id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'pooled', evidenceSource: 'mixed', samples: 3, pooledSamples: 2, successes: 3, failures: 1, score: 2 / 3, averageDurationMs: 1250, averageCostUsd: 0.0123, pricing: { source: 'vscode', budgetClass: 'low' } }] },
+        { activity: 'advise', domain: 'infrastructure', difficulty: 'complex', recommendedModelId: 'm', recommendedVendor: 'ollama', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', manualSelection: { modelId: 'm', vendor: 'ollama' }, sampleCount: 0, pooledSampleCount: 0, selectionMode: 'manual', eligibleCount: 1, candidates: [{ id: 'm', name: 'Model', vendor: 'ollama', selectionMode: 'manual', pricing: { source: 'local', budgetClass: 'low' } }, { id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'learned', pricing: { source: 'vscode', budgetClass: 'low' } }] }
+    ], recordCount: 6, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true } });
+    assert.equal(elements.get('recommendations').children.length, 2);
+    assert.equal(elements.get('recommendations').children[0].children.length, 6);
+    assert.equal(elements.get('recommendations').children[0].children[0].textContent, 'Implement');
+    assert.equal(elements.get('recommendations').children[0].children[1].textContent, 'Coding');
+    assert.equal(elements.get('recommendations').children[0].children[2].textContent, 'Simple');
+    assert.equal(elements.get('context-count').textContent, 'Showing 2 of 2 contexts');
+    assert.equal(elements.get('recommendations').children[0].children[4].children[0].textContent, '3 exact / 2 pooled');
+    assert.equal(elements.get('recommendations').children[0].children[4].children[1].textContent, '3 pass / 1 fail; 67% smoothed score');
+    assert.equal(elements.get('recommendations').children[0].children[5].textContent, 'low');
+    assert.match(elements.get('recommendations').children[0].children[3].children[0].title, /Selection mode: Pooled evidence/);
+    assert.match(elements.get('recommendations').children[0].children[3].children[0].title, /Average measured duration: 1250 ms/);
+    assert.match(elements.get('recommendations').children[0].children[5].title, /Price source: Native rate/);
+    const learnedCell = elements.get('recommendations').children[0].children[3];
+    assert.equal(learnedCell.children.length, 1);
+    assert.equal(learnedCell.children[0].textContent, 'Cloud (copilot)');
+    assert.match(learnedCell.children[0].attributes['aria-label'], /Choose manual model/);
+    const manualCell = elements.get('recommendations').children[1].children[3];
+    assert.equal(manualCell.children[0].textContent, 'Model (ollama)');
+    assert.equal(manualCell.children[1].textContent, 'X');
+    assert.equal(manualCell.children[1].attributes['aria-label'].startsWith('Clear manual selection'), true);
+    assert.equal(manualCell.children[2].textContent, 'Suggested: Cloud (copilot)');
+    assert.equal(elements.get('context-domain-heading').hidden, false);
+    assert.equal(elements.get('model-count').textContent, '3 models');
+    assert.equal(elements.get('model-count-label').textContent, '3 models');
+    elements.get('model-search').value = 'Cloud';
+    elements.get('view-tabs').children[1].listeners.click();
+    assert.equal(elements.get('recommendations-view').hidden, true);
+    assert.equal(elements.get('inventory-view').hidden, false);
+    assert.equal(elements.get('model-search').value, 'Cloud');
+    elements.get('view-tabs').children[0].listeners.click();
+    assert.equal(elements.get('recommendations-view').hidden, false);
+    assert.equal(elements.get('inventory-view').hidden, true);
+    assert.notEqual(elements.get('context-difficulty-heading').hidden, true);
+    elements.get('activity-tabs').children[0].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
+    assert.equal(elements.get('recommendations').children.length, 1);
+    assert.equal(elements.get('context-count').textContent, 'Showing 1 of 2 contexts');
+    assert.equal(elements.get('recommendations').children[0].children[0].hidden, true);
+    assert.equal(elements.get('context-activity-heading').hidden, true);
+    const implementTab = elements.get('activity-tabs').children.find(tab => tab.dataset.filterValue === 'implement');
+    implementTab.listeners.click();
+    assert.equal(elements.get('recommendations').children.length, 1);
+    assert.equal(elements.get('context-count').textContent, 'Showing 1 of 2 contexts');
+    assert.equal(elements.get('activity-tabs').children.find(tab => tab.dataset.filterValue === 'implement').focused, true);
+    elements.get('domain-tabs').children[0].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
+    assert.equal(elements.get('recommendations').children.length, 1);
+    assert.equal(elements.get('recommendations').children[0].children[1].hidden, true);
+    assert.equal(elements.get('context-domain-heading').hidden, true);
+    assert.equal(elements.get('recommendations').children[0].children[2].hidden, undefined);
+    assert.equal(elements.get('context-difficulty-heading').hidden, undefined);
+    assert.equal(elements.get('domain-tabs').children.find(tab => tab.dataset.filterValue === 'coding').focused, true);
+    elements.get('domain-tabs').children.find(tab => tab.dataset.filterValue === 'all').listeners.click();
+    assert.equal(elements.get('recommendations').children[0].children[1].hidden, false);
+    assert.equal(elements.get('context-domain-heading').hidden, false);
     assert.equal(elements.get('model-priority').disabled, false);
     assert.equal(scopeControls[1].disabled, false);
     assert.equal(scopeControls[2].disabled, false);
@@ -731,20 +855,29 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
     select.value = 'standard';
     select.listeners.change();
     assert.deepEqual(messages.at(-1), { type: 'setLocalTier', id: 'm', vendor: 'ollama', tier: 'standard' });
-    const provider = elements.get('provider-controls').children[2];
+    const provider = elements.get('providers').children[2].children[1].children[0];
     provider.listeners.click();
     assert.deepEqual(messages.at(-1), { type: 'setProviderSelected', vendor: 'ollama', selected: false });
-    const providerType = elements.get('provider-types').children[2].children[1];
+    const providerType = elements.get('providers').children[2].children[2].children[0];
     providerType.value = 'cloud';
     providerType.listeners.change();
     assert.deepEqual(messages.at(-1), { type: 'setProviderType', vendor: 'ollama', kind: 'cloud' });
-    assert.equal(elements.get('provider-types').children[0].children[1].textContent, 'Cloud');
-    assert.equal(elements.get('provider-types').children[1].children[1].textContent, 'Cloud');
+    assert.equal(elements.get('providers').children[0].children[2].textContent, 'Cloud');
+    assert.equal(elements.get('providers').children[1].children[2].textContent, 'Cloud');
     assert.equal(elements.get('models').children[2].children[3].textContent, 'high');
     const priceTier = elements.get('models').children[1].children[3].children[0];
     priceTier.value = 'medium';
     priceTier.listeners.change();
     assert.deepEqual(messages.at(-1), { type: 'setManualPriceTier', id: 'c', vendor: 'copilot', tier: 'medium' });
+    const manualOverride = elements.get('recommendations').children[0].children[3];
+    manualOverride.children[0].listeners.click();
+    assert.deepEqual(messages.at(-1), {
+        type: 'chooseManualModel', activity: 'implement', domain: 'coding', difficulty: 'simple'
+    });
+    manualCell.children[1].listeners.click();
+    assert.deepEqual(messages.at(-1), {
+        type: 'useLearnedModel', activity: 'advise', domain: 'infrastructure', difficulty: 'complex'
+    });
     elements.get('model-scope').listeners.change({ target: { name: 'model-scope', value: 'local' } });
     assert.deepEqual(messages.at(-1), { type: 'setModelScope', scope: 'local' });
     receive({ data: { type: 'learningDashboard', models: [], providerTypes: {}, lockedProviders: [], dashboard: [], recordCount: 0, scope: 'cloud', priority: 'local-first', hasSelectedLocalModel: false } });

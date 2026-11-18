@@ -3,7 +3,7 @@ import test from 'node:test';
 import learningModule from '../src/model-learning.js';
 import pricingModule from '../src/model-pricing.js';
 
-const { compactModelRecommendations, emptyScorecard, excludeUnavailableModels, getLearningDashboard, getModelRecommendations, normalizeScorecard, recordOutcome } = learningModule;
+const { compactModelRecommendations, emptyScorecard, excludeUnavailableModels, getContextualLearningDashboard, getLearningDashboard, getModelRecommendations, normalizeScorecard, recordOutcome } = learningModule;
 const getPricing = model => ({ inputCost: model.inputCost, outputCost: model.outputCost, budgetClass: model.budgetClass });
 
 test('fallback exclusions distinguish an exact model from a whole provider', () => {
@@ -328,4 +328,134 @@ test('local capability tiers limit task eligibility and require explicit ratings
     assert.deepEqual(pricingModule.selectModels(models, ['ollama'], {}, 'both', { taskCategory: 'simple', localTiers, selections: { [pricingModule.modelKey(models[0])]: false } }).map(model => model.id), ['cloud']);
     assert.deepEqual(pricingModule.selectModels(models, ['ollama'], {}, 'both', { taskCategory: 'simple', localTiers, providerTypes: { ollama: 'unknown' } }).map(model => model.id), ['cloud']);
     assert.equal(pricingModule.modelKind(models[1], [], {}, { copilot: 'unknown' }), 'cloud');
+});
+
+test('contextual outcomes retain verified metadata without storing prompt content', () => {
+    const legacy = { schemaVersion: 1, records: [{
+        role: 'coding', taskCategory: 'simple', modelId: 'old', outcome: 'success',
+        evidenceCode: 'acceptance_passed', recordedAt: '2026-01-01T00:00:00.000Z'
+    }] };
+    const scorecard = recordOutcome(legacy, {
+        activity: 'advise', domain: 'coding', difficulty: 'standard', agent: 'CodeDomainAdvisor',
+        modelId: 'model-a', callId: 'opaque-call-id', outcome: 'success', evidenceCode: 'acceptance_passed',
+        metrics: { durationMs: 1200, costUsd: 0.03 }, prompt: 'private prompt', response: 'private response'
+    });
+
+    assert.equal(scorecard.schemaVersion, 2);
+    assert.equal(scorecard.records.length, 2);
+    assert.equal(scorecard.records[0].role, 'coding');
+    assert.equal(scorecard.records[1].activity, 'advise');
+    assert.equal(scorecard.records[1].domain, 'coding');
+    assert.equal(scorecard.records[1].callId, 'opaque-call-id');
+    assert.equal(scorecard.records[1].metrics.durationMs, 1200);
+    assert.equal(scorecard.records[1].metrics.costUsd, 0.03);
+    assert.equal('prompt' in scorecard.records[1], false);
+    assert.equal(normalizeScorecard(legacy).records.length, 1);
+    assert.throws(() => recordOutcome(emptyScorecard(), {
+        activity: 'advise', domain: 'coding', difficulty: 'simple', modelId: 'model-a',
+        outcome: 'success', evidenceCode: 'acceptance_passed', metrics: { durationMs: -1 }
+    }), /non-negative measured/);
+});
+
+test('contextual recommendations pool related evidence and expose its source', () => {
+    let scorecard = emptyScorecard();
+    for (let index = 0; index < 8; index += 1) {
+        scorecard = recordOutcome(scorecard, {
+            activity: 'advise', domain: 'coding', difficulty: 'standard', modelId: 'model-a',
+            outcome: index < 6 ? 'success' : 'failure',
+            evidenceCode: index < 6 ? 'acceptance_passed' : 'incorrect',
+            metrics: { durationMs: 1000 + index * 100 }
+        });
+    }
+    scorecard = recordOutcome(scorecard, {
+        activity: 'implement', domain: 'coding', difficulty: 'standard', modelId: 'model-b',
+        outcome: 'success', evidenceCode: 'acceptance_passed'
+    });
+    const models = [
+        { id: 'model-a', name: 'Model A', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'model-b', name: 'Model B', vendor: 'copilot', inputCost: 200, outputCost: 1000 }
+    ];
+    const result = getModelRecommendations(scorecard, {
+        activity: 'advise', domain: 'coding', difficulty: 'complex', models, getPricing
+    });
+    const candidate = result.candidates.find(model => model.id === 'model-a');
+
+    assert.equal(result.selectionMode, 'pooled');
+    assert.equal(result.recommendedModelId, 'model-a');
+    assert.equal(candidate.samples, 0);
+    assert.equal(candidate.pooledSamples, 8);
+    assert.equal(candidate.effectiveSamples, 4);
+    assert.equal(candidate.evidenceSource, 'pooled');
+    assert.equal(candidate.averageDurationMs, 1350);
+    assert.equal(result.candidates.find(model => model.id === 'model-b').effectiveSamples, 0.2);
+    const row = getContextualLearningDashboard(scorecard, models, getPricing)
+        .find(item => item.activity === 'advise' && item.domain === 'coding' && item.difficulty === 'complex');
+    assert.equal(row.sampleCount, 0);
+    assert.equal(row.pooledSampleCount, 9);
+    assert.equal(row.selectionMode, 'pooled');
+
+    const compact = compactModelRecommendations(result);
+    assert.equal(compact.activity, 'advise');
+    assert.equal(compact.domain, 'coding');
+    assert.equal(compact.difficulty, 'complex');
+    assert.equal(compact.candidates.find(model => model.id === 'model-a').evidenceSource, 'pooled');
+});
+
+test('legacy scorecards contribute only low-weight pooled evidence', () => {
+    const scorecard = normalizeScorecard({ schemaVersion: 1, records: [{
+        role: 'coding', taskCategory: 'simple', modelId: 'legacy-model', outcome: 'success',
+        evidenceCode: 'acceptance_passed', recordedAt: '2026-01-01T00:00:00.000Z'
+    }] });
+    const dashboard = getContextualLearningDashboard(scorecard, [
+        { id: 'legacy-model', name: 'Legacy', vendor: 'copilot', inputCost: 10, outputCost: 50 }
+    ], getPricing);
+    const row = dashboard.find(item => item.activity === 'advise' && item.domain === 'coding' && item.difficulty === 'simple');
+
+    assert.equal(scorecard.records.length, 1);
+    assert.equal(row.sampleCount, 0);
+    assert.equal(row.pooledSampleCount, 1);
+    assert.equal(row.selectionMode, 'explore');
+});
+
+test('legacy GitHub workflow records migrate to the Documentation and Governance domain', () => {
+    const scorecard = normalizeScorecard({ schemaVersion: 2, records: [{
+        activity: 'operate', domain: 'github-workflow', difficulty: 'standard', modelId: 'legacy',
+        outcome: 'success', evidenceCode: 'acceptance_passed', recordedAt: '2026-01-01T00:00:00.000Z'
+    }] });
+
+    assert.equal(scorecard.records.length, 1);
+    assert.equal(scorecard.records[0].domain, 'documentation-governance');
+});
+
+test('manual model selections override only the exact context and preserve the selected candidate', () => {
+    const models = [
+        { id: 'learned', name: 'Learned', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'pinned', name: 'Pinned', vendor: 'copilot', inputCost: 200, outputCost: 1000 }
+    ];
+    let scorecard = emptyScorecard();
+    for (let index = 0; index < 3; index += 1) {
+        scorecard = recordOutcome(scorecard, {
+            activity: 'implement', domain: 'coding', difficulty: 'simple', modelId: 'learned',
+            outcome: 'success', evidenceCode: 'acceptance_passed'
+        });
+    }
+    const options = { activity: 'implement', domain: 'coding', difficulty: 'simple', models, getPricing };
+    const manual = getModelRecommendations(scorecard, { ...options, manualSelection: { modelId: 'pinned', vendor: 'copilot' } });
+    const compact = compactModelRecommendations(manual);
+
+    assert.equal(manual.recommendedModelId, 'pinned');
+    assert.equal(manual.recommendedVendor, 'copilot');
+    assert.equal(manual.selectionMode, 'manual');
+    assert.equal(manual.candidates[0].id, 'pinned');
+    assert.equal(compact.candidates[0].id, 'pinned');
+    assert.equal(compact.candidates[0].selectionMode, 'manual');
+    assert.equal(getModelRecommendations(scorecard, { ...options, difficulty: 'complex' }).recommendedModelId, null);
+
+    const unavailable = getModelRecommendations(scorecard, {
+        ...options,
+        models: [{ id: 'pinned', name: 'Pinned', vendor: 'copilot' }],
+        manualSelection: { modelId: 'pinned', vendor: 'copilot' }
+    });
+    assert.equal(unavailable.recommendedModelId, null);
+    assert.equal(unavailable.selectionMode, 'manual-unavailable');
 });

@@ -1,9 +1,15 @@
 (() => {
     const vscode = acquireVsCodeApi();
-    const roles = ['advisor', 'coding', 'documentation', 'infrastructure', 'review'];
-    const tasks = ['simple', 'standard', 'complex'];
+    const activityLabels = { advise: 'Advise', implement: 'Implement', analyze: 'Analyze', review: 'Review', document: 'Document', operate: 'Operate' };
+    const domainLabels = {
+        coding: 'Coding', business: 'Business', 'documentation-governance': 'Documentation and governance',
+        infrastructure: 'Infrastructure', 'cross-domain': 'Cross-domain'
+    };
+    let activeView = 'recommendations';
     let models = [];
     let dashboard = [];
+    let activeActivity = 'all';
+    let activeDomain = 'all';
     let scope = 'both';
     let priority = 'cloud-first';
     let hasSelectedLocalModel = false;
@@ -11,6 +17,88 @@
     let lockedProviders = [];
 
     const byId = id => document.getElementById(id);
+
+    function selectView(view, focus = false) {
+        const tabs = Array.from(byId('view-tabs').children);
+        activeView = view;
+        for (const tab of tabs) {
+            const selected = tab.dataset.view === view;
+            const panel = byId(`${tab.dataset.view}-view`);
+            tab.tabIndex = selected ? 0 : -1;
+            tab.setAttribute('aria-selected', String(selected));
+            panel.hidden = !selected;
+            panel.setAttribute('aria-labelledby', tab.id);
+        }
+        if (focus) tabs.find(tab => tab.dataset.view === view)?.focus();
+    }
+
+    function initializeViewTabs() {
+        const tabs = Array.from(byId('view-tabs').children);
+        for (const [index, tab] of tabs.entries()) {
+            tab.addEventListener('click', () => selectView(tab.dataset.view, true));
+            tab.addEventListener('keydown', event => {
+                const nextIndex = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+                    : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
+                        : event.key === 'Home' ? 0
+                            : event.key === 'End' ? tabs.length - 1 : -1;
+                if (nextIndex < 0) return;
+                event.preventDefault();
+                selectView(tabs[nextIndex].dataset.view, true);
+            });
+        }
+        selectView(activeView);
+    }
+
+    function renderFilterTabs(containerId, prefix, selected, labels, onSelect) {
+        const container = byId(containerId);
+        container.replaceChildren();
+        const options = [['all', 'All'], ...Object.entries(labels)];
+        for (const [value, label] of options) {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.id = `${prefix}-${value}`;
+            tab.dataset.filterValue = value;
+            tab.textContent = label;
+            tab.tabIndex = value === selected ? 0 : -1;
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-selected', String(value === selected));
+            tab.setAttribute('aria-controls', 'recommendations-panel');
+            tab.addEventListener('click', () => onSelect(value, true));
+            tab.addEventListener('keydown', event => {
+                const index = options.findIndex(([option]) => option === value);
+                const nextIndex = event.key === 'ArrowRight' ? (index + 1) % options.length
+                    : event.key === 'ArrowLeft' ? (index - 1 + options.length) % options.length
+                        : event.key === 'Home' ? 0
+                            : event.key === 'End' ? options.length - 1 : -1;
+                if (nextIndex < 0) return;
+                event.preventDefault();
+                onSelect(options[nextIndex][0], true);
+            });
+            container.append(tab);
+        }
+    }
+
+    function renderActivityTabs() {
+        renderFilterTabs('activity-tabs', 'activity-tab', activeActivity, activityLabels, selectActivity);
+    }
+
+    function renderDomainTabs() {
+        renderFilterTabs('domain-tabs', 'domain-tab', activeDomain, domainLabels, selectDomain);
+    }
+
+    function selectActivity(activity, focus = false) {
+        activeActivity = activity;
+        renderActivityTabs();
+        if (focus) Array.from(byId('activity-tabs').children).find(tab => tab.dataset.filterValue === activity)?.focus();
+        renderDashboard();
+    }
+
+    function selectDomain(domain, focus = false) {
+        activeDomain = domain;
+        renderDomainTabs();
+        if (focus) Array.from(byId('domain-tabs').children).find(tab => tab.dataset.filterValue === domain)?.focus();
+        renderDashboard();
+    }
 
     function renderModels() {
         const body = byId('models');
@@ -92,102 +180,158 @@
             row.append(selection, name, provider, tier, price, source);
             body.append(row);
         }
-        byId('model-count').textContent = query ? `${visibleModels.length} / ${models.length} models` : `${models.length} models`;
+        const modelCount = query ? `${visibleModels.length} / ${models.length} models` : `${models.length} models`;
+        byId('model-count').textContent = modelCount;
+        byId('model-count-label').textContent = modelCount;
     }
 
     function renderProviders() {
-        const container = byId('provider-controls');
-        const settings = byId('provider-types');
-        container.replaceChildren();
-        settings.replaceChildren();
+        const body = byId('providers');
+        body.replaceChildren();
         for (const vendor of [...new Set(models.map(model => model.vendor))].sort()) {
             const providerModels = models.filter(model => model.vendor === vendor);
             const allSelected = providerModels.every(model => model.selected);
             const selectedCount = providerModels.filter(model => model.selected).length;
+            const row = document.createElement('tr');
+            const provider = document.createElement('td');
+            provider.textContent = vendor;
+            const selection = document.createElement('td');
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'provider-filter';
-            button.textContent = `${vendor} ${selectedCount}/${providerModels.length}`;
+            button.textContent = `${selectedCount} / ${providerModels.length} selected`;
             button.setAttribute('aria-pressed', allSelected ? 'true' : selectedCount ? 'mixed' : 'false');
-            button.title = `${allSelected ? 'Clear' : 'Select'} all models from ${vendor}, including filtered models`;
+            button.setAttribute('aria-label', `${allSelected ? 'Deselect' : 'Select'} all models from ${vendor}`);
             button.addEventListener('click', () => {
                 setStatus('Saving provider selection...', 'is-loading');
                 vscode.postMessage({ type: 'setProviderSelected', vendor, selected: !allSelected });
             });
-            container.append(button);
-            const label = document.createElement('label');
-            label.className = 'provider-type';
-            const providerName = document.createElement('span');
-            providerName.textContent = vendor;
+            selection.append(button);
+            const typeCell = document.createElement('td');
             if (lockedProviders.includes(vendor)) {
-                const cloud = document.createElement('span');
-                cloud.textContent = 'Cloud';
-                label.append(providerName, cloud);
-                settings.append(label);
-                continue;
+                typeCell.textContent = 'Cloud';
+            } else {
+                const type = document.createElement('select');
+                type.setAttribute('aria-label', `Model type for ${vendor}`);
+                for (const [value, label] of [['unknown', 'Unknown'], ['cloud', 'Cloud'], ['local', 'Local']]) {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = label;
+                    type.append(option);
+                }
+                type.value = providerTypes[vendor] || 'unknown';
+                type.addEventListener('change', () => {
+                    setStatus('Saving provider type...', 'is-loading');
+                    vscode.postMessage({ type: 'setProviderType', vendor, kind: type.value });
+                });
+                typeCell.append(type);
             }
-            const type = document.createElement('select');
-            type.setAttribute('aria-label', `Model type for ${vendor}`);
-            for (const [value, label] of [['unknown', 'Unknown'], ['cloud', 'Cloud'], ['local', 'Local']]) {
-                const option = document.createElement('option');
-                option.value = value;
-                option.textContent = label;
-                type.append(option);
-            }
-            type.value = providerTypes[vendor] || 'unknown';
-            type.addEventListener('change', () => {
-                setStatus('Saving provider type...', 'is-loading');
-                vscode.postMessage({ type: 'setProviderType', vendor, kind: type.value });
-            });
-            label.append(providerName, type);
-            settings.append(label);
+            row.append(provider, selection, typeCell);
+            body.append(row);
         }
     }
 
     function renderDashboard() {
         const body = byId('recommendations');
         body.replaceChildren();
-        for (const role of roles) {
-            const heading = document.createElement('tr');
-            const label = document.createElement('th');
-            label.colSpan = 7;
-            label.textContent = role;
-            heading.append(label);
-            body.append(heading);
-
-            for (const task of tasks) {
-                const cell = dashboard.find(item => item.role === role && item.taskCategory === task);
-                const row = document.createElement('tr');
-                const category = document.createElement('td');
-                category.textContent = task;
-                const recommendation = document.createElement('td');
-                const recommended = cell?.candidates.find(model => model.id === cell.recommendedModelId);
-                recommendation.textContent = recommended
-                    ? `${recommended.name} (${recommended.vendor})`
-                    : task === 'complex' && cell?.eligibleCount ? 'No learned recommendation' : 'No eligible priced model';
-                const price = document.createElement('td');
-                price.textContent = recommended?.pricing?.budgetClass || '—';
-                const mode = document.createElement('td');
-                mode.textContent = recommended?.selectionMode === 'explore' ? 'Exploring' : recommended ? 'Learned' : 'Fallback';
-                const samples = document.createElement('td');
-                samples.textContent = String(cell?.sampleCount || 0);
-                const score = document.createElement('td');
-                score.textContent = recommended
-                    ? `${recommended.successes} pass / ${recommended.failures} fail (${Math.round(recommended.score * 100)}%)`
-                    : task === 'complex' && cell?.eligibleCount ? 'Needs 2 outcomes per model' : '—';
-                const source = document.createElement('td');
-                source.textContent = recommended?.pricing?.source === 'vscode'
-                    ? 'Native rate'
-                    : recommended?.pricing?.source === 'snapshot'
-                        ? `Rate snapshot ${recommended.pricing.snapshotDate}`
-                        : recommended?.pricing?.source === 'local'
-                            ? 'Local (no token charge)'
+        const matchingRows = dashboard.filter(item => (activeActivity === 'all' || item.activity === activeActivity)
+            && (activeDomain === 'all' || item.domain === activeDomain));
+        byId('context-activity-heading').hidden = activeActivity !== 'all';
+        byId('context-domain-heading').hidden = activeDomain !== 'all';
+        byId('recommendations-panel').setAttribute('aria-labelledby', `activity-tab-${activeActivity} domain-tab-${activeDomain}`);
+        byId('context-count').textContent = `Showing ${matchingRows.length} of ${dashboard.length} contexts`;
+        for (const cell of matchingRows) {
+            const row = document.createElement('tr');
+            const activityCell = document.createElement('td');
+            activityCell.hidden = activeActivity !== 'all';
+            activityCell.textContent = activityLabels[cell.activity];
+            const domainCell = document.createElement('td');
+            domainCell.hidden = activeDomain !== 'all';
+            domainCell.textContent = domainLabels[cell.domain];
+            const difficultyCell = document.createElement('td');
+            const difficultyLabel = `${cell.difficulty[0].toUpperCase()}${cell.difficulty.slice(1)}`;
+            difficultyCell.textContent = difficultyLabel;
+            const recommendation = document.createElement('td');
+            const recommended = cell.candidates.find(model => model.id === cell.recommendedModelId
+                && (!cell.recommendedVendor || model.vendor === cell.recommendedVendor));
+            const learnedRecommendation = cell.candidates.find(model => model.id === cell.learnedRecommendedModelId
+                && model.vendor === cell.learnedRecommendedVendor);
+            const manualModel = cell.manualSelection && models.find(model => model.id === cell.manualSelection.modelId
+                && model.vendor === cell.manualSelection.vendor);
+            const manualChoice = document.createElement('button');
+            manualChoice.type = 'button';
+            manualChoice.className = 'manual-model-selection';
+            manualChoice.textContent = cell.manualSelection
+                ? cell.selectionMode === 'manual-unavailable'
+                    ? `Unavailable: ${manualModel?.name || cell.manualSelection.modelId} (${manualModel?.vendor || cell.manualSelection.vendor})`
+                    : `${manualModel?.name || cell.manualSelection.modelId} (${manualModel?.vendor || cell.manualSelection.vendor})`
+                : recommended ? `${recommended.name} (${recommended.vendor})` : 'Choose model';
+            manualChoice.setAttribute('aria-label', `${cell.manualSelection ? 'Change' : 'Choose'} manual model for ${activityLabels[cell.activity]}, ${domainLabels[cell.domain]}, ${difficultyLabel}`);
+            const selectionMode = cell.selectionMode === 'manual' ? 'Manual override'
+                : cell.selectionMode === 'manual-unavailable' ? 'Manual pin unavailable'
+                    : cell.selectionMode === 'pooled' ? 'Pooled evidence'
+                        : recommended?.selectionMode === 'explore' ? 'Exploring'
+                            : recommended?.evidenceSource === 'mixed' ? 'Exact and pooled evidence'
+                                : recommended ? 'Exact evidence' : 'Fallback';
+            const priceSource = recommended?.pricing?.source === 'vscode'
+                ? 'Native rate'
+                : recommended?.pricing?.source === 'snapshot'
+                    ? `Rate snapshot ${recommended.pricing.snapshotDate}`
+                    : recommended?.pricing?.source === 'local'
+                        ? 'Local (no token charge)'
                         : recommended?.pricing?.source === 'manual'
                             ? 'Manual tier'
-                        : '—';
-                row.append(category, recommendation, price, mode, samples, score, source);
-                body.append(row);
+                            : 'Unavailable';
+            manualChoice.title = [
+                `Selection mode: ${selectionMode}`,
+                cell.manualSelection && learnedRecommendation ? `Learned suggestion: ${learnedRecommendation.name} (${learnedRecommendation.vendor})` : null,
+                Number.isFinite(recommended?.averageDurationMs) ? `Average measured duration: ${Math.round(recommended.averageDurationMs)} ms` : null,
+                Number.isFinite(recommended?.averageCostUsd) ? `Average measured cost: ${new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(recommended.averageCostUsd)}` : null,
+                `Price source: ${priceSource}`
+            ].filter(Boolean).join('\n');
+            manualChoice.addEventListener('click', () => {
+                setStatus('Opening manual model picker...', 'is-loading');
+                vscode.postMessage({ type: 'chooseManualModel', activity: cell.activity, domain: cell.domain, difficulty: cell.difficulty });
+            });
+            recommendation.append(manualChoice);
+            let reset;
+            if (cell.manualSelection) {
+                reset = document.createElement('button');
+                reset.type = 'button';
+                reset.className = 'use-learned-model';
+                reset.textContent = 'X';
+                reset.title = 'Clear manual selection';
+                reset.setAttribute('aria-label', `Clear manual selection for ${activityLabels[cell.activity]}, ${domainLabels[cell.domain]}, ${difficultyLabel}`);
+                reset.addEventListener('click', () => {
+                    setStatus('Restoring learned recommendation...', 'is-loading');
+                    vscode.postMessage({ type: 'useLearnedModel', activity: cell.activity, domain: cell.domain, difficulty: cell.difficulty });
+                });
+                recommendation.append(reset);
             }
+            if (cell.manualSelection) {
+                const learnedLabel = document.createElement('small');
+                learnedLabel.textContent = learnedRecommendation
+                    ? `Suggested: ${learnedRecommendation.name} (${learnedRecommendation.vendor})`
+                    : 'No learned suggestion available';
+                recommendation.append(learnedLabel);
+            }
+            const price = document.createElement('td');
+            price.textContent = recommended?.pricing?.budgetClass || '—';
+            price.title = `Price source: ${priceSource}${recommended?.pricing?.snapshotDate ? ` (${recommended.pricing.snapshotDate})` : ''}`;
+            const evidence = document.createElement('td');
+            const sampleCount = document.createElement('div');
+            sampleCount.textContent = recommended
+                ? `${recommended.samples} exact / ${recommended.pooledSamples} pooled`
+                : `${cell.sampleCount} exact / ${cell.pooledSampleCount} pooled overall`;
+            const quality = document.createElement('small');
+            quality.textContent = recommended
+                ? `${recommended.successes} pass / ${recommended.failures} fail; ${Math.round(recommended.score * 100)}% smoothed score`
+                : cell.selectionMode === 'manual-unavailable' ? 'Pinned model unavailable'
+                    : cell.difficulty === 'complex' && cell.eligibleCount ? 'Needs 2 exact or 4 pooled outcomes' : 'No outcome evidence';
+            evidence.title = 'The smoothed score is a ranking signal, not a probability.';
+            evidence.append(sampleCount, quality);
+            row.append(activityCell, domainCell, difficultyCell, recommendation, evidence, price);
+            body.append(row);
         }
     }
 
@@ -212,6 +356,9 @@
 
     byId('refresh-learning').addEventListener('click', refresh);
     byId('model-search').addEventListener('input', renderModels);
+    initializeViewTabs();
+    renderActivityTabs();
+    renderDomainTabs();
     byId('model-scope').addEventListener('change', event => {
         if (event.target.name !== 'model-scope') return;
         setStatus('Saving model scope...', 'is-loading');

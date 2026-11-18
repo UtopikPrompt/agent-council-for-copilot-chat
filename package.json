@@ -91,22 +91,33 @@
                 "displayName": "Read Aro model recommendations",
                 "toolReferenceName": "aroGetModelRecommendations",
                 "canBeReferencedInPrompt": true,
-                "userDescription": "Read locally learned model recommendations for a specialist role and task type.",
-                "modelDescription": "Read Aro's profile-local model outcomes and cloud/local scope and priority for the given role and task category. Scores the eligible inventory and returns a bounded shortlist and counts. For confirmed unavailability, requery with exact model/vendor pairs or provider IDs excluded; exclusions apply only to this request. The shortlist is not exhaustive. Never bypass scope or priority. Does not read the user's chat model, send prompts to models, or change Aro's main model.",
+                "userDescription": "Read locally learned model recommendations for an activity, domain, and difficulty.",
+                "modelDescription": "Read Aro's profile-local outcomes and cloud/local scope and priority for the given activity, domain, and difficulty. Uses exact and cautiously weighted related evidence, labels pooled evidence, and returns a bounded shortlist with an opaque per-recommendation callId for outcome correlation. For confirmed unavailability, requery with exact model/vendor pairs or provider IDs excluded; exclusions apply only to this request. Never bypass scope or priority. Does not read the user's chat model, send prompts to models, or change Aro's main model.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "role": {
+                        "activity": {
                             "type": "string",
                             "enum": [
-                                "advisor",
-                                "coding",
-                                "documentation",
-                                "infrastructure",
-                                "review"
+                                "advise",
+                                "implement",
+                                "analyze",
+                                "review",
+                                "document",
+                                "operate"
                             ]
                         },
-                        "taskCategory": {
+                        "domain": {
+                            "type": "string",
+                            "enum": [
+                                "coding",
+                                "business",
+                                "documentation-governance",
+                                "infrastructure",
+                                "cross-domain"
+                            ]
+                        },
+                        "difficulty": {
                             "type": "string",
                             "enum": [
                                 "simple",
@@ -151,8 +162,9 @@
                         }
                     },
                     "required": [
-                        "role",
-                        "taskCategory"
+                        "activity",
+                        "domain",
+                        "difficulty"
                     ],
                     "additionalProperties": false
                 }
@@ -162,22 +174,33 @@
                 "displayName": "Record Aro model outcome",
                 "toolReferenceName": "aroRecordModelOutcome",
                 "canBeReferencedInPrompt": true,
-                "userDescription": "Record a verified subagent result for future model recommendations.",
-                "modelDescription": "Update Aro's local model scorecard after a specialist call. Record success only after acceptance checks pass. Record failure only when there is concrete evidence the requested model produced an incorrect, incomplete, acceptance-failing, or unsafe result. Do not blame the model for missing input, incorrect routing, tool failure, rejected requests, or environment issues. Never send prompts or response text; provide only the requested model ID and a fixed evidence code.",
+                "userDescription": "Record a verified model outcome for an activity, domain, and difficulty.",
+                "modelDescription": "Update Aro's local scorecard after an advisor or specialist call. Record success only after acceptance checks pass. Record failure only when concrete evidence attributes an incorrect, incomplete, acceptance-failing, or unsafe result to the requested model. Do not blame the model for missing input, incorrect routing, tool failure, rejected requests, or environment issues. Never send prompts or response text. Include optional measured duration or cost only when the runtime provides trustworthy values.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "role": {
+                        "activity": {
                             "type": "string",
                             "enum": [
-                                "advisor",
-                                "coding",
-                                "documentation",
-                                "infrastructure",
-                                "review"
+                                "advise",
+                                "implement",
+                                "analyze",
+                                "review",
+                                "document",
+                                "operate"
                             ]
                         },
-                        "taskCategory": {
+                        "domain": {
+                            "type": "string",
+                            "enum": [
+                                "coding",
+                                "business",
+                                "documentation-governance",
+                                "infrastructure",
+                                "cross-domain"
+                            ]
+                        },
+                        "difficulty": {
                             "type": "string",
                             "enum": [
                                 "simple",
@@ -188,6 +211,12 @@
                         "modelId": {
                             "type": "string",
                             "maxLength": 300
+                        },
+                        "callId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100,
+                            "description": "Opaque ID returned by the recommendation call for this dispatch."
                         },
                         "outcome": {
                             "type": "string",
@@ -209,11 +238,32 @@
                         "worker": {
                             "type": "string",
                             "maxLength": 100
+                        },
+                        "agent": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "metrics": {
+                            "type": "object",
+                            "properties": {
+                                "durationMs": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 604800000
+                                },
+                                "costUsd": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1000000
+                                }
+                            },
+                            "additionalProperties": false
                         }
                     },
                     "required": [
-                        "role",
-                        "taskCategory",
+                        "activity",
+                        "domain",
+                        "difficulty",
                         "modelId",
                         "outcome",
                         "evidenceCode"

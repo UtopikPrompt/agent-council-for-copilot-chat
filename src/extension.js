@@ -2,16 +2,20 @@ const vscode = require('vscode');
 const { randomBytes } = require('node:crypto');
 const { effectiveModelScope, getInventorySummary, getManagedPricing, hasSelectedLocalModel, isCopilotCloudVendor, isModelSelected, modelKey, modelKind, selectModels } = require('./model-pricing');
 const {
+    ACTIVITIES,
     compactModelRecommendations,
+    DOMAINS,
     excludeUnavailableModels,
-    getLearningDashboard,
+    getContextualLearningDashboard,
     getModelRecommendations,
     normalizeScorecard,
-    recordOutcome
+    recordOutcome,
+    TASK_CATEGORIES
 } = require('./model-learning');
 
 const LEARNING_STORAGE_KEY = 'agentRoster.modelLearning.scorecard.v1';
 const INVENTORY_STORAGE_KEY = 'agentRoster.modelLearning.inventory.v1';
+const MANUAL_SELECTIONS_KEY = 'agentRoster.modelLearning.manualSelections.v1';
 const dashboardRefreshers = new Set();
 let inventoryUpdates = Promise.resolve();
 
@@ -38,6 +42,26 @@ function saveInventoryPolicy(context, policy) {
         providerTypes: policy.providerTypes, selections: policy.selections,
         localTiers: policy.localTiers, manualPriceTiers: policy.manualPriceTiers
     });
+}
+
+function getManualSelections(context) {
+    const stored = context.globalState.get(MANUAL_SELECTIONS_KEY);
+    return Array.isArray(stored) ? stored.map(selection => selection?.domain === 'github-workflow'
+        ? { ...selection, domain: 'documentation-governance' }
+        : selection).filter(selection => selection
+        && ACTIVITIES.includes(selection.activity)
+        && DOMAINS.includes(selection.domain)
+        && TASK_CATEGORIES.includes(selection.difficulty)
+        && typeof selection.modelId === 'string'
+        && selection.modelId.length > 0
+        && typeof selection.vendor === 'string'
+        && selection.vendor.length > 0) : [];
+}
+
+function getManualSelection(selections, context) {
+    return selections.find(selection => selection.activity === context.activity
+        && selection.domain === context.domain
+        && selection.difficulty === context.difficulty) || null;
 }
 
 function enqueueInventoryUpdate(update) {
@@ -88,17 +112,26 @@ function createLearningSidebar(context) {
             rows.push(item('Outcomes', String(scorecard.records.length), 'graph', openDashboard));
             const last = scorecard.records.at(-1);
             if (last) {
-                const eligible = selectModels(models, policy.localModelVendors, policy.classifications, summary.scope, { ...policy, taskCategory: last.taskCategory });
+                const difficulty = last.difficulty || last.taskCategory;
+                const context = last.activity ? {
+                    activity: last.activity,
+                    domain: last.domain,
+                    difficulty
+                } : { role: last.role, taskCategory: difficulty };
+                const eligible = selectModels(models, policy.localModelVendors, policy.classifications, summary.scope, { ...policy, taskCategory: difficulty });
                 const result = getModelRecommendations(scorecard, {
-                    role: last.role, taskCategory: last.taskCategory, models: eligible,
+                    ...context, models: eligible,
                     getPricing: model => getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers),
                     getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
                     preference: summary.scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
                 });
                 const recommended = result.candidates.find(candidate => candidate.id === result.recommendedModelId);
-                const fallback = last.taskCategory === 'complex' && result.candidates.some(candidate => Number.isFinite(candidate.cost))
+                const fallback = difficulty === 'complex' && result.candidates.some(candidate => Number.isFinite(candidate.cost))
                     ? 'No learned recommendation' : 'No eligible model';
-                rows.push(item(`Latest context: ${last.role} / ${last.taskCategory}`, recommended ? `${recommended.name} (${recommended.vendor})` : fallback, 'lightbulb', openDashboard, 'Current recommendation for the most recently recorded outcome; not proof of the model used.'));
+                const contextLabel = last.activity
+                    ? `${last.activity} / ${last.domain} / ${difficulty}`
+                    : `${last.role} / ${difficulty}`;
+                rows.push(item(`Latest context: ${contextLabel}`, recommended ? `${recommended.name} (${recommended.vendor})` : fallback, 'lightbulb', openDashboard, 'Current recommendation for the most recently recorded outcome; not proof of the model used.'));
             } else {
                 rows.push(item('Latest context', 'No recorded outcomes', 'lightbulb', openDashboard));
             }
@@ -166,18 +199,19 @@ function activate(context) {
 function registerModelLearningTools(context) {
     const readTool = vscode.lm.registerTool('aroGetModelRecommendations', {
         prepareInvocation({ input }) {
-            return { invocationMessage: `Reading learned model outcomes for ${input.role} / ${input.taskCategory}` };
+            return { invocationMessage: `Reading learned model outcomes for ${input.activity} / ${input.domain} / ${input.difficulty}` };
         },
         async invoke({ input }) {
             const policy = getInventoryPolicy(context);
             const availableModels = await vscode.lm.selectChatModels();
             const scope = effectiveModelScope(availableModels, policy);
-            const eligibleModels = selectModels(availableModels, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: input.taskCategory });
+            const eligibleModels = selectModels(availableModels, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: input.difficulty });
             const models = excludeUnavailableModels(eligibleModels, { excludedModels: input.excludedModels, excludedProviders: input.excludedProviders });
             const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
+            const manualSelection = getManualSelection(getManualSelections(context), input);
             const recommendations = getModelRecommendations(scorecard, {
-                role: input.role,
-                taskCategory: input.taskCategory,
+                ...input,
+                manualSelection,
                 models: models.map(model => ({
                     id: model.id,
                     name: model.name,
@@ -194,22 +228,24 @@ function registerModelLearningTools(context) {
                 getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
                 preference: scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
             });
+            const callId = randomBytes(16).toString('hex');
             return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart(JSON.stringify({ ...compactModelRecommendations(recommendations), modelScope: scope, modelPriority: scope === 'both' ? policy.priority : null }))
+                new vscode.LanguageModelTextPart(JSON.stringify({ ...compactModelRecommendations(recommendations), callId, modelScope: scope, modelPriority: scope === 'both' ? policy.priority : null }))
             ]);
         }
     });
 
     const recordTool = vscode.lm.registerTool('aroRecordModelOutcome', {
         prepareInvocation({ input }) {
-            return { invocationMessage: `Recording verified ${input.outcome} for ${input.role} / ${input.taskCategory}` };
+            return { invocationMessage: `Recording verified ${input.outcome} for ${input.activity} / ${input.domain} / ${input.difficulty}` };
         },
         async invoke({ input }) {
             const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
             const next = recordOutcome(scorecard, input);
             await context.globalState.update(LEARNING_STORAGE_KEY, next);
-            const matching = next.records.filter(record => record.role === input.role
-                && record.taskCategory === input.taskCategory
+            const matching = next.records.filter(record => record.activity === input.activity
+                && record.domain === input.domain
+                && record.difficulty === input.difficulty
                 && record.modelId === input.modelId);
             const successes = matching.filter(record => record.outcome === 'success').length;
             const failures = matching.length - successes;
@@ -218,8 +254,10 @@ function registerModelLearningTools(context) {
                 new vscode.LanguageModelTextPart(JSON.stringify({
                     stored: true,
                     modelId: input.modelId,
-                    role: input.role,
-                    taskCategory: input.taskCategory,
+                    callId: input.callId,
+                    activity: input.activity,
+                    domain: input.domain,
+                    difficulty: input.difficulty,
                     successes,
                     failures,
                     samples: matching.length,
@@ -273,6 +311,7 @@ function openModelLearning(context) {
             inventoryModels = summaries;
             const scope = effectiveModelScope(summaries, policy);
             const getPricing = model => getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers);
+            const manualSelections = getManualSelections(context);
             panel.webview.postMessage({
                 type: 'learningDashboard',
                 scope,
@@ -287,8 +326,9 @@ function openModelLearning(context) {
                 })),
                 providerTypes: Object.fromEntries([...new Set(summaries.map(model => model.vendor))].map(vendor => [vendor, isCopilotCloudVendor(vendor) ? 'cloud' : policy.providerTypes[vendor] || (policy.localModelVendors.includes(vendor) ? 'local' : 'unknown')])),
                 lockedProviders: [...new Set(summaries.map(model => model.vendor).filter(isCopilotCloudVendor))],
-                dashboard: getLearningDashboard(scorecard, summaries, getPricing, {
-                    getModelsForTask: taskCategory => selectModels(summaries, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory }),
+                dashboard: getContextualLearningDashboard(scorecard, summaries, getPricing, {
+                    getModelsForTask: difficulty => selectModels(summaries, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: difficulty }),
+                    getManualSelection: context => getManualSelection(manualSelections, context),
                     getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
                     preference: scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
                 }),
@@ -309,6 +349,60 @@ function openModelLearning(context) {
     dashboardRefreshers.add(refresh);
     panel.webview.onDidReceiveMessage(message => {
         if (message.type === 'ready' || message.type === 'refreshLearning') void refresh();
+        if (['chooseManualModel', 'useLearnedModel'].includes(message.type)) {
+            void enqueueInventoryUpdate(async () => {
+                const learningContext = {
+                    activity: message.activity,
+                    domain: message.domain,
+                    difficulty: message.difficulty
+                };
+                if (!ACTIVITIES.includes(learningContext.activity) || !DOMAINS.includes(learningContext.domain)
+                    || !TASK_CATEGORIES.includes(learningContext.difficulty)) throw new Error('Invalid recommendation context.');
+                const selections = getManualSelections(context).filter(selection => !(
+                    selection.activity === learningContext.activity
+                    && selection.domain === learningContext.domain
+                    && selection.difficulty === learningContext.difficulty));
+                if (message.type === 'chooseManualModel') {
+                    const policy = getInventoryPolicy(context);
+                    const scope = effectiveModelScope(inventoryModels, policy);
+                    const eligibleModels = selectModels(inventoryModels, policy.localModelVendors, policy.classifications, scope, {
+                        ...policy,
+                        taskCategory: learningContext.difficulty
+                    });
+                    const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
+                    const recommendations = getModelRecommendations(scorecard, {
+                        ...learningContext,
+                        models: eligibleModels,
+                        getPricing: model => getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers),
+                        getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
+                        preference: scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
+                    });
+                    const choices = recommendations.candidates.filter(candidate => Number.isFinite(candidate.cost)).map(candidate => ({
+                        label: candidate.name,
+                        description: candidate.vendor,
+                        detail: `${candidate.pricing.budgetClass}; ${candidate.samples} exact / ${candidate.pooledSamples} pooled outcomes`,
+                        modelId: candidate.id,
+                        vendor: candidate.vendor
+                    }));
+                    if (!choices.length) throw new Error('No eligible priced models are available for this context and scope.');
+                    const choice = await vscode.window.showQuickPick(choices, {
+                        title: `Manual model: ${learningContext.activity} / ${learningContext.domain} / ${learningContext.difficulty}`,
+                        placeHolder: 'Choose a model for this context'
+                    });
+                    if (!choice) {
+                        refreshLearningViews();
+                        return;
+                    }
+                    selections.push({ ...learningContext, modelId: choice.modelId, vendor: choice.vendor });
+                }
+                await context.globalState.update(MANUAL_SELECTIONS_KEY, selections);
+                if (refreshPromise) await refreshPromise;
+                refreshLearningViews();
+            }).catch(error => {
+                panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
+            });
+            return;
+        }
         if (['setModelScope', 'setModelPriority', 'setModelSelected', 'setProviderSelected', 'setProviderType', 'setLocalTier', 'setManualPriceTier'].includes(message.type)) {
             void enqueueInventoryUpdate(async () => {
                 const policy = getInventoryPolicy(context);
@@ -406,21 +500,27 @@ function getLearningHtml(webview, extensionUri) {
 <body>
   <header>
         <h1>Aro Model Learning</h1>
-        <p>Recommendations improve from verified specialist outcomes by role and task type.</p>
+                <p>Recommendations learn from verified outcomes for each activity, domain, and difficulty.</p>
   </header>
-    <p class="notice">Aro records only the requested model ID, role, task category, outcome code, and worker name. It stores no prompts or responses. Aro will not record tool/environment failures as model failures. Runtime model resolution is not independently verified.</p>
+        <p class="notice">Aro stores context labels, the requested model ID, verified outcome code, and optional measured duration or cost. It stores no prompts or responses. Tool and environment failures are not model failures; runtime model resolution is not independently verified.</p>
   <main>
-        <section>
-            <div class="toolbar"><h2>Learned recommendations</h2><button id="refresh-learning" type="button">Refresh</button></div>
             <div id="learning-status" class="model-load-status is-loading" role="status" aria-live="polite" aria-busy="true">
                 <span id="learning-message">Loading Aro's scorecard...</span>
             </div>
+            <div class="page-tabs" id="view-tabs" role="tablist" aria-label="Aro learning views">
+                <button id="view-tab-recommendations" type="button" role="tab" aria-selected="true" aria-controls="recommendations-view" data-view="recommendations">Recommendations</button>
+                <button id="view-tab-inventory" type="button" role="tab" aria-selected="false" aria-controls="inventory-view" data-view="inventory" tabindex="-1">Model inventory <span id="model-count">0 models</span></button>
+            </div>
+        <section id="recommendations-view" class="view-panel" role="tabpanel" aria-labelledby="view-tab-recommendations">
+            <div class="toolbar"><h2>Learned recommendations</h2><button id="refresh-learning" type="button">Refresh</button></div>
             <fieldset class="scope-controls" id="model-scope"><legend>Model scope</legend><label><input type="radio" name="model-scope" value="cloud"> Cloud only</label><label><input type="radio" name="model-scope" value="local" disabled> Local only</label><label><input type="radio" name="model-scope" value="both" disabled> Both</label><label for="model-priority">Priority <select id="model-priority" disabled><option value="cloud-first">Cloud first</option><option value="local-first">Local first</option></select></label></fieldset>
-            <div class="table-wrap"><table><thead><tr><th>Role / task</th><th>Recommended model</th><th>Price tier</th><th>Selection mode</th><th>Outcomes</th><th>Observed quality</th><th>Price source</th></tr></thead><tbody id="recommendations"></tbody></table></div>
-            <details id="model-inventory" open>
-                <summary>Model inventory <span id="model-count">0 models</span></summary>
-                <div class="inventory-content"><div class="inventory-toolbar"><label class="inventory-search">Search models <input id="model-search" type="search" placeholder="Name or provider"></label><div id="provider-controls" class="provider-controls"></div></div><details class="provider-settings"><summary>Provider types</summary><div id="provider-types" class="provider-types"></div></details><div class="table-wrap"><table><thead><tr><th>Use</th><th>Model</th><th>Provider / family</th><th>Tier</th><th>Price / 1M tokens</th><th>Source</th></tr></thead><tbody id="models"></tbody></table></div></div>
-            </details>
+            <fieldset class="context-controls" id="learning-context"><legend>Filter recommendation table</legend><div class="activity-filter"><span id="domain-filter-label">Domain</span><div id="domain-tabs" class="activity-tabs" role="tablist" aria-labelledby="domain-filter-label"></div></div><div class="activity-filter"><span id="activity-filter-label">Activity</span><div id="activity-tabs" class="activity-tabs" role="tablist" aria-labelledby="activity-filter-label"></div></div></fieldset>
+            <p id="context-count" class="context-count" aria-live="polite"></p>
+            <div class="table-wrap" id="recommendations-panel" role="tabpanel" aria-labelledby="activity-tab-all" tabindex="0"><table><thead><tr><th id="context-activity-heading">Activity</th><th id="context-domain-heading">Domain</th><th id="context-difficulty-heading">Difficulty</th><th>Recommended model</th><th>Evidence</th><th>Price</th></tr></thead><tbody id="recommendations"></tbody></table></div>
+        </section>
+        <section id="inventory-view" class="view-panel" role="tabpanel" aria-labelledby="view-tab-inventory" hidden>
+            <div class="toolbar"><h2>Model inventory</h2><span id="model-count-label">0 models</span></div>
+            <div class="inventory-content"><label class="inventory-search">Search models <input id="model-search" type="search" placeholder="Name or provider"></label><h3>Providers</h3><div class="table-wrap"><table><thead><tr><th>Provider</th><th>Model selection</th><th>Type</th></tr></thead><tbody id="providers"></tbody></table></div><h3>Models</h3><div class="table-wrap"><table><thead><tr><th>Use</th><th>Model</th><th>Provider / family</th><th>Tier</th><th>Price / 1M tokens</th><th>Source</th></tr></thead><tbody id="models"></tbody></table></div></div>
         </section>
   </main>
   <script nonce="${nonce}" src="${scriptUri}"></script>

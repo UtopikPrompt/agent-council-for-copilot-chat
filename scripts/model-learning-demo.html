@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aro Learning Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --vscode-editor-background: #1e1e1e;
+      --vscode-foreground: #d4d4d4;
+      --vscode-descriptionForeground: #9da2a8;
+      --vscode-panel-border: #3c3c3c;
+      --vscode-sideBar-background: #252526;
+      --vscode-editorWarning-foreground: #cca700;
+      --vscode-editorInfo-foreground: #3794ff;
+      --vscode-testing-iconPassed: #73c991;
+      --vscode-errorForeground: #f14c4c;
+      --vscode-focusBorder: #007acc;
+      --vscode-progressBar-background: #3794ff;
+      --vscode-button-secondaryBackground: #3a3d41;
+      --vscode-button-secondaryForeground: #d4d4d4;
+      --vscode-button-secondaryHoverBackground: #45494e;
+      --vscode-input-background: #3c3c3c;
+      --vscode-input-border: #3c3c3c;
+      --vscode-input-foreground: #d4d4d4;
+      --vscode-button-background: #0e639c;
+      --vscode-button-foreground: #fff;
+    }
+  </style>
+  <link rel="stylesheet" href="../media/model-learning-dashboard.css">
+</head>
+<body>
+  <header>
+    <h1>Aro Model Learning</h1>
+    <p>Recommendations learn from verified outcomes for each activity, domain, and difficulty.</p>
+  </header>
+  <p class="notice">Demo data only. Model names, prices, and outcomes below are fictional.</p>
+  <main>
+    <div id="learning-status" class="model-load-status is-loading" role="status" aria-live="polite" aria-busy="true">
+      <span id="learning-message">Loading demo recommendations...</span>
+    </div>
+    <div class="page-tabs" id="view-tabs" role="tablist" aria-label="Aro learning views">
+      <button id="view-tab-recommendations" type="button" role="tab" aria-selected="true" aria-controls="recommendations-view" data-view="recommendations">Recommendations</button>
+      <button id="view-tab-inventory" type="button" role="tab" aria-selected="false" aria-controls="inventory-view" data-view="inventory" tabindex="-1">Model inventory <span id="model-count">0 models</span></button>
+    </div>
+    <section id="recommendations-view" class="view-panel" role="tabpanel" aria-labelledby="view-tab-recommendations">
+      <div class="toolbar"><h2>Learned recommendations</h2><button id="refresh-learning" type="button">Refresh</button></div>
+      <fieldset class="scope-controls" id="model-scope"><legend>Model scope</legend><label><input type="radio" name="model-scope" value="cloud"> Cloud only</label><label><input type="radio" name="model-scope" value="local" disabled> Local only</label><label><input type="radio" name="model-scope" value="both" disabled> Both</label><label for="model-priority">Priority <select id="model-priority" disabled><option value="cloud-first">Cloud first</option><option value="local-first">Local first</option></select></label></fieldset>
+      <fieldset class="context-controls" id="learning-context"><legend>Filter recommendation table</legend><div class="activity-filter"><span id="domain-filter-label">Domain</span><div id="domain-tabs" class="activity-tabs" role="tablist" aria-labelledby="domain-filter-label"></div></div><div class="activity-filter"><span id="activity-filter-label">Activity</span><div id="activity-tabs" class="activity-tabs" role="tablist" aria-labelledby="activity-filter-label"></div></div></fieldset>
+      <p id="context-count" class="context-count" aria-live="polite"></p>
+      <div class="table-wrap" id="recommendations-panel" role="tabpanel" aria-labelledby="activity-tab-all" tabindex="0"><table><thead><tr><th id="context-activity-heading">Activity</th><th id="context-domain-heading">Domain</th><th id="context-difficulty-heading">Difficulty</th><th>Recommended model</th><th>Evidence</th><th>Price</th></tr></thead><tbody id="recommendations"></tbody></table></div>
+    </section>
+    <section id="inventory-view" class="view-panel" role="tabpanel" aria-labelledby="view-tab-inventory" hidden>
+      <div class="toolbar"><h2>Model inventory</h2><span id="model-count-label">0 models</span></div>
+      <div class="inventory-content"><label class="inventory-search">Search models <input id="model-search" type="search" placeholder="Name or provider"></label><h3>Providers</h3><div class="table-wrap"><table><thead><tr><th>Provider</th><th>Model selection</th><th>Type</th></tr></thead><tbody id="providers"></tbody></table></div><h3>Models</h3><div class="table-wrap"><table><thead><tr><th>Use</th><th>Model</th><th>Provider / family</th><th>Tier</th><th>Price / 1M tokens</th><th>Source</th></tr></thead><tbody id="models"></tbody></table></div></div>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const modelData = [
+        { id: 'claude-haiku-demo', name: 'Claude Haiku 5.5', vendor: 'copilot', family: 'Claude', version: '5.5', kind: 'cloud', selected: true, localTier: 'unrated', pricing: { budgetClass: 'low', source: 'vscode', inputCost: 10, outputCost: 50 } },
+        { id: 'claude-sonnet-demo', name: 'Claude Sonnet 5.5', vendor: 'copilot', family: 'Claude', version: '5.5', kind: 'cloud', selected: true, localTier: 'unrated', pricing: { budgetClass: 'high', source: 'vscode', inputCost: 200, outputCost: 1000 } },
+        { id: 'qwen-demo', name: 'Qwen 3 8B', vendor: 'ollama', family: 'Qwen', version: '3', kind: 'local', selected: true, localTier: 'standard', pricing: { budgetClass: 'low', source: 'local', inputCost: 0, outputCost: 0 } }
+      ];
+      const haiku = { id: 'claude-haiku-demo', name: 'Claude Haiku 5.5', vendor: 'copilot', selectionMode: 'learned', samples: 9, pooledSamples: 4, successes: 9, failures: 0, score: 0.9, evidenceSource: 'exact', averageDurationMs: 1800, averageCostUsd: 0.0012, pricing: modelData[0].pricing };
+      const sonnet = { id: 'claude-sonnet-demo', name: 'Claude Sonnet 5.5', vendor: 'copilot', selectionMode: 'manual', samples: 0, pooledSamples: 0, successes: 0, failures: 0, score: 0.5, evidenceSource: 'none', averageDurationMs: null, averageCostUsd: null, pricing: modelData[1].pricing };
+      const activities = ['advise', 'implement', 'analyze', 'review', 'document', 'operate'];
+      const domains = ['coding', 'business', 'documentation-governance', 'infrastructure', 'cross-domain'];
+      const difficulties = ['simple', 'standard', 'complex'];
+      const dashboard = activities.flatMap(activity => domains.flatMap(domain => difficulties.map(difficulty => {
+        const isDemoContext = activity === 'implement' && domain === 'coding';
+        if (isDemoContext && difficulty === 'simple') return {
+          activity, domain, difficulty, recommendedModelId: sonnet.id, recommendedVendor: sonnet.vendor,
+          learnedRecommendedModelId: haiku.id, learnedRecommendedVendor: haiku.vendor,
+          manualSelection: { modelId: sonnet.id, vendor: sonnet.vendor }, sampleCount: 0, pooledSampleCount: 0,
+          selectionMode: 'manual', eligibleCount: 3, candidates: [sonnet, haiku]
+        };
+        if (isDemoContext && difficulty === 'standard') return {
+          activity, domain, difficulty, recommendedModelId: haiku.id, recommendedVendor: haiku.vendor,
+          learnedRecommendedModelId: haiku.id, learnedRecommendedVendor: haiku.vendor,
+          manualSelection: null, sampleCount: 5, pooledSampleCount: 3, selectionMode: 'learned', eligibleCount: 3,
+          candidates: [haiku, sonnet]
+        };
+        if (isDemoContext && difficulty === 'complex') return {
+          activity, domain, difficulty, recommendedModelId: null, recommendedVendor: null,
+          learnedRecommendedModelId: null, learnedRecommendedVendor: null,
+          manualSelection: null, sampleCount: 0, pooledSampleCount: 11, selectionMode: 'fallback', eligibleCount: 3,
+          candidates: []
+        };
+        return {
+          activity, domain, difficulty, recommendedModelId: haiku.id, recommendedVendor: haiku.vendor,
+          learnedRecommendedModelId: haiku.id, learnedRecommendedVendor: haiku.vendor,
+          manualSelection: null, sampleCount: 2, pooledSampleCount: 1, selectionMode: 'learned', eligibleCount: 3,
+          candidates: [haiku, sonnet]
+        };
+      })));
+      window.acquireVsCodeApi = () => ({ postMessage: message => {
+        if (message.type === 'ready' || message.type === 'refreshLearning') {
+          window.dispatchEvent(new MessageEvent('message', { data: {
+            type: 'learningDashboard', models: modelData, dashboard, providerTypes: { copilot: 'cloud', ollama: 'local' },
+            lockedProviders: ['copilot'], dashboard, recordCount: 27, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true
+          } }));
+        }
+      } });
+    })();
+  </script>
+  <script src="../media/model-learning-dashboard.js?demo=compact-table-2"></script>
+  <script>
+    document.getElementById('domain-tab-coding').click();
+    document.getElementById('activity-tab-implement').click();
+  </script>
+</body>
+</html>

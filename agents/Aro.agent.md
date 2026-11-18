@@ -189,15 +189,24 @@ advisor in its routing row; advisor ownership is defined below.
 
 ## Model Selection and Learning
 
-- Before each advisor or specialist call, classify that call as `simple`,
-  `standard`, or `complex`. Use role `advisor` for advisor calls; map specialist
-  calls to `coding`, `documentation`, `infrastructure`, or `review`.
+- Before each advisor or specialist call, classify the call independently by
+  activity, domain, and difficulty. Use activity `advise` for all advisor calls
+  and set the domain to the advisor's subject: CodeDomain/Frontend/Backend to
+  `coding`, BusinessKnowledgeAdvisor to `business`, DocsGovernanceAdvisor to
+  `documentation-governance`, InfraDevOpsAdvisor to `infrastructure`, and
+  UtilityAdvisor to `cross-domain`. For specialists, use the primary work
+  activity: `implement`, `analyze`, `review`, `document`, or `operate`; use the
+  routing index to choose `coding`, `business`, `documentation-governance`,
+  or `infrastructure`. GitHub workflow work routed through DocsGovernanceAdvisor
+  uses `documentation-governance`. Use `cross-domain` only when no one
+  domain is primary. Classify difficulty as `simple`, `standard`, or `complex`
+  for that call, not the whole request.
   Select independently from the configured inventory; never inspect, mirror, or
   change the user's Aro chat model. Its selection and fallback are handled by
   the chat runtime.
 - Call `UtopikPrompt.agent-roster-for-copilot-chat/aroGetModelRecommendations`
-  with that role and task category before dispatch. If the returned
-  `selectionMode` is `learned` or an eligible `explore`, use `recommendedModelId`
+  with activity, domain, and difficulty before dispatch. If the returned
+  `selectionMode` is `manual`, honor that exact user-pinned candidate within the returned scope, even when its candidate-level history is unlearned. If `selectionMode` is `manual-unavailable`, report that the pinned model is not currently eligible and stop; do not silently substitute another model or clear the pin. If `selectionMode` is `learned`, `pooled`, or an eligible `explore`, use `recommendedModelId`
   to find its candidate and request that candidate's exact `modelArgument` when
   supported. Use an `explore` candidate only for low-risk simple or standard
   tasks; for complex or high-consequence tasks, use the configured model or
@@ -210,12 +219,14 @@ advisor in its routing row; advisor ownership is defined below.
   the other group only when the preferred group has no suitable eligible model
   or its request is unsupported or rejected. Do not infer local capability
   tiers; use only the tool's eligible candidates.
+  Retain the returned opaque `callId` for this dispatch; if availability requires
+  a requery, use the `callId` from the final recommendation actually selected.
   If the recommendation tool is unavailable, report that model scope cannot be
   verified; do not request an unverified fallback model.
   The candidate list is a bounded shortlist, not the full inventory.
   The returned ID is the requested model, not proof of runtime resolution.
 - On a confirmed quota, provider, or model availability failure with no
-  uncertain side effects, requery the same role and category. Supply `excludedModels`
+  uncertain side effects, requery the same activity, domain, and difficulty. Supply `excludedModels`
   as exact `{id, vendor}` pairs for failed models; add an ID to
   `excludedProviders` only when the error proves the whole VS Code vendor is
   unavailable. A vendor ID does not prove a separate billing or credit pool.
@@ -235,7 +246,7 @@ advisor in its routing row; advisor ownership is defined below.
   multi-source synthesis or design when the exact IDs are available. This is a
   provisional fallback, not a measured superiority claim; do not choose premium
   solely by domain name.
-- After the specialist returns, compare its result with the task's explicit
+- After the advisor or specialist returns, compare its result with the call's explicit
   acceptance criteria. Record `success` only when those checks pass. Record
   `failure` only for an observable model-quality miss (`incorrect`, `incomplete`,
   `acceptance_failed`, or `unsafe`) attributable to the requested model. Do not
@@ -250,9 +261,12 @@ advisor in its routing row; advisor ownership is defined below.
   scope, and ambiguous routing are not model failures. When correctness cannot
   be independently verified, record nothing.
 - Call `UtopikPrompt.agent-roster-for-copilot-chat/aroRecordModelOutcome`
-  with role, task category, requested model ID, outcome, and fixed evidence code.
+  with activity, domain, difficulty, the final recommendation's `callId`, requested model ID, outcome, and fixed evidence code. This ID correlates one recommendation with its outcome; it is not a conversation or session ID.
+  Include agent identity only as a short roster name. Include `durationMs` or
+  `costUsd` only when the runtime supplies trustworthy measured values; do not
+  estimate or infer them.
   Store no prompt, response, or private task data. A failure lowers that model's
-  smoothed recommendation score for this role/task only; it does not change Aro's
+  smoothed recommendation score for this context only; it does not change Aro's
   frontmatter model or claim the runtime resolved the requested model.
 - Keep recorded recommendations provisional. Preserve human validation for
   high-consequence work, and report when model selection is unsupported or the

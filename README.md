@@ -3,7 +3,7 @@
 **Tell Copilot what you need. Aro finds the right specialist.**
 
 <p align="center">
-	<img src="assets/image_885ba20f.jpg" alt="Aro, a robot character surrounded by connected specialist nodes" width="640">
+	<img src="assets/banner.jpg" alt="Aro, a robot character surrounded by connected specialist nodes" width="640">
 </p>
 
 This extension adds 49 focused helpers to GitHub Copilot Chat. They can help explain a project, solve coding problems, plan changes, improve documentation, and more. Aro is the starting point: describe your task in your own words, and it brings in a helper suited to the work.
@@ -123,10 +123,14 @@ The extension also includes 10 reusable guides for common tasks, such as investi
 Open the **Agent Roster** activity-bar view and select **Open Aro Learning** to see price-aware recommendations by specialist role and task type. A contextual UCB-style policy balances observed outcomes, conservative exploration, and model price. Aro records outcomes only after checking explicit acceptance criteria; ambiguous failures do not count against a model. Exploration is limited to low-risk simple or standard tasks. The scorecard is stored in this VS Code profile and contains no prompts or responses. Aro can request the recommended subagent model when the runtime accepts its exact ID; actual model resolution may not be observable. Rates use native metadata when available and a dated snapshot fallback otherwise. This updates recommendations, not model weights or training data.
 
 <p align="center">
-	<img src="assets/aro-learning-dashboard.png" alt="Aro Model Learning dashboard showing illustrative local and cloud recommendations and model inventory" width="800">
+	<img src="assets/aro-learning-dashboard.png" alt="Aro Recommendations view showing Domain and Activity filters, a manual model choice with its learned suggestion, and illustrative outcomes" width="800">
 </p>
 
-The screenshot uses illustrative models, rates, and outcomes.
+<p align="center">
+	<img src="assets/aro-learning-inventory.png" alt="Aro Model inventory view showing illustrative provider selection, provider types, and model settings" width="800">
+</p>
+
+Both screenshots use illustrative models, rates, and outcomes.
 
 Recommendation scoring considers the full eligible inventory, but the tool returns a bounded shortlist to reduce chat context. The shortlist includes the top candidates and eligible provider, learned, and configured Copilot fallbacks where available; its truncation flag indicates when other eligible candidates were omitted.
 

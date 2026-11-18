@@ -1,5 +1,7 @@
 const ROLES = ['advisor', 'coding', 'documentation', 'infrastructure', 'review'];
 const TASK_CATEGORIES = ['simple', 'standard', 'complex'];
+const ACTIVITIES = ['advise', 'implement', 'analyze', 'review', 'document', 'operate'];
+const DOMAINS = ['coding', 'business', 'documentation-governance', 'infrastructure', 'cross-domain'];
 const OUTCOMES = ['success', 'failure'];
 const FAILURE_CODES = ['incorrect', 'incomplete', 'acceptance_failed', 'unsafe'];
 const MAX_RECORDS = 1000;
@@ -12,11 +14,13 @@ function emptyScorecard() {
 
 function normalizeScorecard(value) {
     const records = Array.isArray(value?.records) ? value.records : [];
+    const migratedRecords = records.map(record => record?.domain === 'github-workflow'
+        ? { ...record, domain: 'documentation-governance' }
+        : record);
     return {
-        schemaVersion: 1,
-        records: records.filter(record => record
-            && ROLES.includes(record.role)
-            && TASK_CATEGORIES.includes(record.taskCategory)
+        schemaVersion: 2,
+        records: migratedRecords.filter(record => record
+            && (isLearningContext(record) || (ROLES.includes(record.role) && TASK_CATEGORIES.includes(record.taskCategory)))
             && typeof record.modelId === 'string'
             && OUTCOMES.includes(record.outcome)
             && (record.outcome === 'success'
@@ -28,10 +32,18 @@ function normalizeScorecard(value) {
 }
 
 function recordOutcome(scorecardValue, input) {
-    if (!ROLES.includes(input.role)) throw new TypeError('Unknown model-learning role.');
-    if (!TASK_CATEGORIES.includes(input.taskCategory)) throw new TypeError('Unknown task category.');
+    const contextual = ['activity', 'domain', 'difficulty'].some(key => input[key] !== undefined);
+    if (!contextual && !ROLES.includes(input.role)) throw new TypeError('Unknown model-learning role.');
+    if (contextual && (!ACTIVITIES.includes(input.activity) || !DOMAINS.includes(input.domain)
+        || !TASK_CATEGORIES.includes(input.difficulty))) {
+        throw new TypeError('Unknown model-learning activity or domain.');
+    }
+    if (!contextual && !TASK_CATEGORIES.includes(input.taskCategory)) throw new TypeError('Unknown task difficulty.');
     if (typeof input.modelId !== 'string' || input.modelId.length === 0 || input.modelId.length > 300) {
         throw new TypeError('A requested model ID is required.');
+    }
+    if (input.callId !== undefined && (typeof input.callId !== 'string' || input.callId.length === 0 || input.callId.length > 100)) {
+        throw new TypeError('Call ID must be a non-empty string of at most 100 characters.');
     }
     if (!OUTCOMES.includes(input.outcome)) throw new TypeError('Outcome must be success or failure.');
     if (input.outcome === 'success' && input.evidenceCode !== 'acceptance_passed') {
@@ -40,18 +52,41 @@ function recordOutcome(scorecardValue, input) {
     if (input.outcome === 'failure' && !FAILURE_CODES.includes(input.evidenceCode)) {
         throw new TypeError('Failure requires an objective model-quality failure code.');
     }
+    if (input.metrics !== undefined && (!input.metrics || typeof input.metrics !== 'object'
+        || Array.isArray(input.metrics)
+        || Object.keys(input.metrics).some(key => !['durationMs', 'costUsd'].includes(key))
+        || Object.entries(input.metrics).some(([key, value]) => !Number.isFinite(value) || value < 0
+            || (key === 'durationMs' && value > 604800000) || (key === 'costUsd' && value > 1000000)))) {
+        throw new TypeError('Metrics must contain only non-negative measured durationMs or costUsd values.');
+    }
 
     const scorecard = normalizeScorecard(scorecardValue);
     const record = {
-        role: input.role,
-        taskCategory: input.taskCategory,
+        ...(contextual ? {
+            activity: input.activity,
+            domain: input.domain,
+            difficulty: input.difficulty
+        } : {
+            role: input.role,
+            taskCategory: input.taskCategory
+        }),
         modelId: input.modelId,
         outcome: input.outcome,
         evidenceCode: input.evidenceCode,
+        ...(contextual && input.callId ? { callId: input.callId } : {}),
+        ...(contextual && typeof input.agent === 'string' && input.agent.length <= 100 ? { agent: input.agent } : {}),
+        ...(input.metrics && Object.keys(input.metrics).length ? { metrics: { ...input.metrics } } : {}),
         ...(typeof input.worker === 'string' && input.worker.length <= 100 ? { worker: input.worker } : {}),
         recordedAt: new Date().toISOString()
     };
     return normalizeScorecard({ records: [...scorecard.records, record] });
+}
+
+function isLearningContext(value) {
+    return Boolean(value && typeof value === 'object'
+        && ACTIVITIES.includes(value.activity)
+        && DOMAINS.includes(value.domain)
+        && TASK_CATEGORIES.includes(value.difficulty));
 }
 
 function excludeUnavailableModels(models, { excludedModels = [], excludedProviders = [] } = {}) {
@@ -68,16 +103,60 @@ function excludeUnavailableModels(models, { excludedModels = [], excludedProvide
     return models.filter(model => !providers.has(model.vendor) && !modelKeys.has(JSON.stringify([model.vendor, model.id])));
 }
 
-function getModelRecommendations(scorecardValue, { role, taskCategory, models, getPricing, getModelKind, preference }) {
+function legacyDomain(role) {
+    return {
+        coding: 'coding',
+        documentation: 'documentation-governance',
+        infrastructure: 'infrastructure',
+        review: 'cross-domain'
+    }[role];
+}
+
+function contextWeight(record, context) {
+    if (!context.contextual) {
+        return record.role === context.role && record.taskCategory === context.difficulty ? 1 : 0;
+    }
+    if (!isLearningContext(record)) {
+        if (record.role === 'advisor') return context.activity === 'advise' ? 0.1 : 0;
+        return legacyDomain(record.role) === context.domain ? 0.1 : 0;
+    }
+    if (record.activity === context.activity && record.domain === context.domain) {
+        return record.difficulty === context.difficulty ? 1 : 0.5;
+    }
+    if (record.activity === context.activity || record.domain === context.domain) return 0.2;
+    return 0;
+}
+
+function averageMetric(records, key, context) {
+    const values = records
+        .filter(record => Number.isFinite(record.metrics?.[key]))
+        .map(record => ({ value: record.metrics[key], weight: contextWeight(record, context) }));
+    const totalWeight = values.reduce((total, entry) => total + entry.weight, 0);
+    return totalWeight ? values.reduce((total, entry) => total + entry.value * entry.weight, 0) / totalWeight : null;
+}
+
+function getModelRecommendations(scorecardValue, options) {
+    const { role, models, getPricing, getModelKind, preference } = options;
+    const contextual = isLearningContext(options);
+    const difficulty = contextual ? options.difficulty : options.taskCategory;
+    const context = {
+        contextual,
+        activity: options.activity,
+        domain: options.domain,
+        difficulty,
+        role
+    };
     const scorecard = normalizeScorecard(scorecardValue);
-    const historyForContext = scorecard.records.filter(record => record.role === role && record.taskCategory === taskCategory);
+    const historyForContext = scorecard.records.filter(record => contextWeight(record, context) > 0);
     const candidates = models.map(model => {
-        const history = scorecard.records.filter(record => record.role === role
-            && record.taskCategory === taskCategory
-            && record.modelId === model.id);
+        const history = scorecard.records.filter(record => record.modelId === model.id
+            && contextWeight(record, context) > 0);
+        const exactSamples = history.filter(record => contextWeight(record, context) === 1).length;
+        const effectiveSamples = history.reduce((total, record) => total + contextWeight(record, context), 0);
+        const weightedSuccesses = history.reduce((total, record) => total + (record.outcome === 'success' ? contextWeight(record, context) : 0), 0);
+        const weightedFailures = effectiveSamples - weightedSuccesses;
         const successes = history.filter(record => record.outcome === 'success').length;
         const failures = history.length - successes;
-        const total = history.length;
         const pricing = getPricing(model);
         return {
             id: model.id,
@@ -89,9 +168,16 @@ function getModelRecommendations(scorecardValue, { role, taskCategory, models, g
             pricing,
             successes,
             failures,
-            samples: total,
-            score: (successes + 1) / (total + 2),
-            exploration: Math.min(1, Math.sqrt(Math.log(historyForContext.length + models.length + 1) / (total + 1))),
+            samples: exactSamples,
+            pooledSamples: history.length - exactSamples,
+            effectiveSamples,
+            weightedSuccesses,
+            weightedFailures,
+            score: (weightedSuccesses + 1) / (effectiveSamples + 2),
+            evidenceSource: exactSamples && history.length > exactSamples ? 'mixed' : exactSamples ? 'exact' : history.length ? 'pooled' : 'none',
+            averageDurationMs: averageMetric(history, 'durationMs', context),
+            averageCostUsd: averageMetric(history, 'costUsd', context),
+            exploration: Math.min(1, Math.sqrt(Math.log(historyForContext.length + models.length + 1) / (effectiveSamples + 1))),
             cost: priceOf(pricing)
         };
     });
@@ -104,25 +190,41 @@ function getModelRecommendations(scorecardValue, { role, taskCategory, models, g
             ? (candidate.cost - minCost) / (maxCost - minCost)
             : Number.isFinite(candidate.cost) ? 0 : 1;
         candidate.utility = Number.isFinite(candidate.cost)
-            ? candidate.score + EXPLORE_WEIGHT[taskCategory] * candidate.exploration - PRICE_WEIGHT[taskCategory] * candidate.costRatio
+            ? candidate.score + EXPLORE_WEIGHT[difficulty] * candidate.exploration - PRICE_WEIGHT[difficulty] * candidate.costRatio
             : Number.NEGATIVE_INFINITY;
-        candidate.selectionMode = candidate.samples < 2 ? 'explore' : 'learned';
+        candidate.selectionMode = candidate.samples >= 2 ? 'learned' : candidate.effectiveSamples >= 4 ? 'pooled' : 'explore';
     }
     candidates.sort((left, right) => Number(Number.isFinite(right.cost)) - Number(Number.isFinite(left.cost))
-        || (taskCategory === 'complex' ? Number(right.selectionMode === 'learned') - Number(left.selectionMode === 'learned') : 0)
+        || (difficulty === 'complex' ? Number(['learned', 'pooled'].includes(right.selectionMode)) - Number(['learned', 'pooled'].includes(left.selectionMode)) : 0)
         || (preference ? Number(right.kind === preference) - Number(left.kind === preference) : 0)
         || right.utility - left.utility
         || right.score - left.score
         || left.cost - right.cost
         || left.id.localeCompare(right.id));
 
-    const recommended = candidates.find(candidate => Number.isFinite(candidate.cost)
-        && (taskCategory !== 'complex' || candidate.selectionMode === 'learned'));
+    const learnedRecommendation = candidates.find(candidate => Number.isFinite(candidate.cost)
+        && (difficulty !== 'complex' || ['learned', 'pooled'].includes(candidate.selectionMode)));
+    const manualSelection = contextual && options.manualSelection ? options.manualSelection : null;
+    const manualCandidate = manualSelection && candidates.find(candidate => candidate.id === manualSelection.modelId
+        && candidate.vendor === manualSelection.vendor);
+    const manualUnavailable = Boolean(manualSelection && (!manualCandidate || !Number.isFinite(manualCandidate.cost)));
+    if (manualCandidate && Number.isFinite(manualCandidate.cost)) {
+        manualCandidate.selectionMode = 'manual';
+        candidates.splice(candidates.indexOf(manualCandidate), 1);
+        candidates.unshift(manualCandidate);
+    }
+    const recommended = manualSelection
+        ? manualUnavailable ? undefined : manualCandidate
+        : candidates.find(candidate => Number.isFinite(candidate.cost)
+            && (difficulty !== 'complex' || ['learned', 'pooled'].includes(candidate.selectionMode)));
     return {
-        role,
-        taskCategory,
+        ...(contextual ? { activity: context.activity, domain: context.domain, difficulty } : { role, taskCategory: difficulty }),
         recommendedModelId: recommended?.id || null,
-        selectionMode: recommended?.selectionMode || 'fallback',
+        recommendedVendor: recommended?.vendor || null,
+        learnedRecommendedModelId: learnedRecommendation?.id || null,
+        learnedRecommendedVendor: learnedRecommendation?.vendor || null,
+        manualSelection,
+        selectionMode: manualSelection ? manualUnavailable ? 'manual-unavailable' : 'manual' : recommended?.selectionMode || 'fallback',
         candidates
     };
 }
@@ -131,6 +233,10 @@ function compactModelRecommendations(result) {
     const eligible = result.candidates.filter(candidate => Number.isFinite(candidate.cost));
     const selected = [];
     const keys = new Set();
+    const recommendedCandidate = eligible.find(candidate => candidate.id === result.recommendedModelId
+        && candidate.vendor === result.recommendedVendor);
+    const learnedCandidate = eligible.find(candidate => candidate.id === result.learnedRecommendedModelId
+        && candidate.vendor === result.learnedRecommendedVendor);
     const add = candidate => {
         if (!candidate) return;
         const key = JSON.stringify([candidate.vendor, candidate.id]);
@@ -138,6 +244,8 @@ function compactModelRecommendations(result) {
         keys.add(key);
         selected.push(candidate);
     };
+    add(recommendedCandidate);
+    add(learnedCandidate);
     eligible.slice(0, 3).forEach(add);
     const preferredKind = eligible[0]?.kind;
     if (preferredKind) add(eligible.find(candidate => candidate.kind && candidate.kind !== preferredKind));
@@ -149,11 +257,19 @@ function compactModelRecommendations(result) {
     }
     const rank = new Map(eligible.map((candidate, index) => [candidate, index]));
     selected.sort((left, right) => rank.get(left) - rank.get(right));
+    if (recommendedCandidate) selected.unshift(...selected.splice(selected.indexOf(recommendedCandidate), 1));
     return {
         role: result.role,
         taskCategory: result.taskCategory,
         recommendedModelId: result.recommendedModelId,
+        recommendedVendor: result.recommendedVendor,
+        learnedRecommendedModelId: result.learnedRecommendedModelId,
+        learnedRecommendedVendor: result.learnedRecommendedVendor,
+        manualSelection: result.manualSelection,
         selectionMode: result.selectionMode,
+        activity: result.activity,
+        domain: result.domain,
+        difficulty: result.difficulty,
         candidates: selected.map(candidate => ({
             id: candidate.id,
             name: candidate.name,
@@ -162,9 +278,14 @@ function compactModelRecommendations(result) {
             kind: candidate.kind,
             selectionMode: candidate.selectionMode,
             samples: candidate.samples,
+            pooledSamples: candidate.pooledSamples,
+            effectiveSamples: Number(candidate.effectiveSamples.toFixed(2)),
             successes: candidate.successes,
             failures: candidate.failures,
             score: Number(candidate.score.toFixed(3)),
+            evidenceSource: candidate.evidenceSource,
+            averageDurationMs: candidate.averageDurationMs,
+            averageCostUsd: candidate.averageCostUsd,
             pricing: { budgetClass: candidate.pricing.budgetClass, source: candidate.pricing.source }
         })),
         eligibleCount: eligible.length,
@@ -192,6 +313,35 @@ function getLearningDashboard(scorecardValue, models, getPricing, options = {}) 
     }));
 }
 
+function getContextualLearningDashboard(scorecardValue, models, getPricing, options = {}) {
+    const scorecard = normalizeScorecard(scorecardValue);
+    return ACTIVITIES.flatMap(activity => DOMAINS.flatMap(domain => TASK_CATEGORIES.map(difficulty => {
+        const recommendation = getModelRecommendations(scorecard, {
+            activity, domain, difficulty, models: options.getModelsForTask ? options.getModelsForTask(difficulty) : models,
+            getPricing, getModelKind: options.getModelKind, preference: options.preference,
+            manualSelection: options.getManualSelection ? options.getManualSelection({ activity, domain, difficulty }) : undefined
+        });
+        const exactSamples = scorecard.records.filter(record => contextWeight(record, { contextual: true, activity, domain, difficulty }) === 1).length;
+        const pooledSamples = scorecard.records.filter(record => contextWeight(record, { contextual: true, activity, domain, difficulty }) > 0
+            && contextWeight(record, { contextual: true, activity, domain, difficulty }) < 1).length;
+        return {
+            activity,
+            domain,
+            difficulty,
+            sampleCount: exactSamples,
+            pooledSampleCount: pooledSamples,
+            recommendedModelId: recommendation.recommendedModelId,
+            recommendedVendor: recommendation.recommendedVendor,
+            learnedRecommendedModelId: recommendation.learnedRecommendedModelId,
+            learnedRecommendedVendor: recommendation.learnedRecommendedVendor,
+            manualSelection: recommendation.manualSelection,
+            selectionMode: recommendation.selectionMode,
+            eligibleCount: recommendation.candidates.filter(candidate => Number.isFinite(candidate.cost)).length,
+            candidates: recommendation.candidates.slice(0, 3)
+        };
+    })));
+}
+
 function priceOf(pricing) {
     const rates = [pricing?.inputCost, pricing?.outputCost, pricing?.cacheCost, pricing?.cacheWriteCost]
         .filter(rate => Number.isFinite(rate) && rate >= 0);
@@ -200,7 +350,9 @@ function priceOf(pricing) {
 }
 
 module.exports = {
+    ACTIVITIES,
     compactModelRecommendations,
+    DOMAINS,
     excludeUnavailableModels,
     FAILURE_CODES,
     OUTCOMES,
@@ -208,6 +360,7 @@ module.exports = {
     TASK_CATEGORIES,
     emptyScorecard,
     getLearningDashboard,
+    getContextualLearningDashboard,
     getModelRecommendations,
     normalizeScorecard,
     recordOutcome

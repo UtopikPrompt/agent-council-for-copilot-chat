@@ -76,6 +76,68 @@ button:disabled {
     justify-content: space-between;
 }
 
+.page-tabs {
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 4px;
+    margin: 16px 0 0;
+    overflow-x: auto;
+}
+
+.page-tabs [role="tab"] {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    flex: 0 0 auto;
+}
+
+.page-tabs [role="tab"][aria-selected="true"] {
+    border-bottom-color: var(--vscode-focusBorder, #007acc);
+    color: var(--vscode-focusBorder, #007acc);
+}
+
+.page-tabs #model-count {
+    color: var(--muted);
+    float: none;
+    margin-left: 6px;
+}
+
+.view-panel[hidden] {
+    display: none;
+}
+
+.page-tabs {
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 4px;
+    margin: 16px 0 0;
+    overflow-x: auto;
+}
+
+.page-tabs [role="tab"] {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    flex: 0 0 auto;
+}
+
+.page-tabs [role="tab"][aria-selected="true"] {
+    border-bottom-color: var(--vscode-focusBorder, #007acc);
+    color: var(--vscode-focusBorder, #007acc);
+}
+
+.page-tabs #model-count {
+    color: var(--muted);
+    float: none;
+    margin-left: 6px;
+}
+
+.view-panel[hidden] {
+    display: none;
+}
+
 .model-load-status {
     align-items: center;
     background: var(--surface-raised);
@@ -140,20 +202,17 @@ td small {
     overflow-wrap: anywhere;
 }
 
-#model-inventory {
-    border: 1px solid var(--border);
-    margin-top: 20px;
-}
-
-#model-inventory summary {
-    background: var(--surface-raised);
-    cursor: pointer;
-    padding: 8px 10px;
-}
-
 #model-count {
     color: var(--muted);
     float: right;
+}
+
+#model-count-label {
+    color: var(--muted);
+}
+
+#model-count-label {
+    color: var(--muted);
 }
 
 .inventory-content {
@@ -187,7 +246,8 @@ input[type="search"] {
     padding: 3px 6px;
 }
 
-.scope-controls {
+.scope-controls,
+.context-controls {
     border: 0;
     display: flex;
     flex-wrap: wrap;
@@ -196,16 +256,56 @@ input[type="search"] {
     padding: 0;
 }
 
-.scope-controls legend {
+.context-controls {
+    align-items: stretch;
+    flex-direction: column;
+}
+
+.scope-controls legend,
+.context-controls legend {
     color: var(--muted);
     font-weight: 500;
     margin-bottom: 4px;
 }
 
-.scope-controls label {
+.scope-controls label,
+.context-controls label {
     align-items: center;
     display: inline-flex;
     gap: 5px;
+}
+
+.context-controls select {
+    max-width: min(280px, 60vw);
+}
+
+.activity-filter {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    width: 100%;
+}
+
+.activity-tabs {
+    display: flex;
+    gap: 4px;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.activity-tabs [role="tab"] {
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom-color: var(--border);
+    border-radius: 0;
+    flex: 0 0 auto;
+}
+
+.activity-tabs [role="tab"][aria-selected="true"] {
+    border-bottom-color: var(--vscode-focusBorder, #007acc);
+    color: var(--vscode-focusBorder, #007acc);
 }
 
 .inventory-search {
@@ -229,38 +329,6 @@ input[type="search"] {
     justify-content: space-between;
 }
 
-.provider-controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    justify-content: flex-end;
-    margin: 8px 0 0 auto;
-    max-width: 100%;
-}
-
-.provider-types {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 16px;
-    padding: 8px 0;
-}
-
-.provider-type {
-    align-items: center;
-    display: inline-flex;
-    gap: 6px;
-}
-
-.provider-settings {
-    margin-top: 8px;
-}
-
-#model-inventory .provider-settings summary {
-    background: transparent;
-    color: var(--muted);
-    padding: 0;
-}
-
 .provider-filter[aria-pressed="true"] {
     background: var(--vscode-button-background, #0e639c);
     color: var(--vscode-button-foreground, #fff);
@@ -268,4 +336,20 @@ input[type="search"] {
 
 .provider-filter[aria-pressed="mixed"] {
     border-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.manual-model-selection {
+    display: inline-flex;
+    margin-right: 6px;
+    text-align: left;
+}
+
+.use-learned-model {
+    align-items: center;
+    aspect-ratio: 1;
+    display: inline-flex;
+    justify-content: center;
+    margin: 0 0 4px;
+    min-width: 28px;
+    padding: 2px;
 }

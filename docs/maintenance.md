@@ -8,6 +8,16 @@ The package excludes source Git metadata, Python caches, generated reports, hist
 
 Useful roster descriptions become the [agent catalog](agents.md). Runtime routing remains embedded in Orchestrator rather than relying on that documentation.
 
+## Contextual Model Learning
+
+Model outcomes are recorded per advisor or specialist call using `activity`, `domain`, and `difficulty`, not as one label for an entire multi-agent task. Activities describe the call (`advise`, `implement`, `analyze`, `review`, `document`, or `operate`); domains describe its subject; difficulty remains `simple`, `standard`, or `complex`. Aro classifies each dispatch from its routing context and records only verified outcome codes, the requested model ID, and optional agent identity.
+
+Recommendations prefer exact context evidence. Related evidence is weighted conservatively: `0.5` for the same activity and domain at another difficulty, `0.2` for a match on activity or domain, and `0.1` for relevant version-1 records. Two exact outcomes qualify as learned evidence; otherwise, at least four effective weighted outcomes are needed for pooled evidence. Complex calls are not recommended from exploration alone. Each recommendation returns an opaque per-call ID; Aro records that ID with the verified outcome so repeated identical contexts remain distinguishable. It is not a conversation/session identifier. The dashboard identifies pooled evidence and reports exact and pooled counts separately.
+
+Users may pin a manually chosen model for one exact activity/domain/difficulty context or restore its learned choice. Pins are stored separately from outcome records and do not count as evidence. A pinned model must remain eligible and priced under the active model scope; when it is unavailable, Aro reports that state rather than silently substituting another model.
+
+Version-1 scorecard records remain readable and intact under the existing profile storage key; the next recorded outcome writes them alongside version-2 contextual records. Legacy labels are treated only as weak pooled evidence because they do not establish all three dimensions. `durationMs` and `costUsd` are optional and must be trustworthy measured values supplied by the runtime; model price lists are not per-call cost measurements. Prompts and responses are never stored.
+
 ## Extraction Decisions
 
 The [extraction map](extraction-map.json) records the canonical source agent, original headings and every consuming agent for each of the nine extracted skills. The benchmark skill is retained separately, not counted as a new extraction. Shared procedures have one skill entry point; the relevant agent sections now link to that procedure and must load it before acting.
