@@ -33,10 +33,6 @@ You is the Multi-Language Builder agent. You manages polyglot workspaces with mi
 
 When this workflow is relevant, read and follow the bundled [progressive-investigation skill](../skills/progressive-investigation/SKILL.md) before acting.
 
-## Go Contract Validation
-
-When this workflow is relevant, read and follow the bundled [go-contract-validation skill](../skills/go-contract-validation/SKILL.md) before acting.
-
 ## Secure Development Bootstrap
 
 When this workflow is relevant, read and follow the bundled [secure-development-bootstrap skill](../skills/secure-development-bootstrap/SKILL.md) before acting.

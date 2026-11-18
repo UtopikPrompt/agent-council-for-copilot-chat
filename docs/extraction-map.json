@@ -41,6 +41,7 @@
       "Frontend Experience Quality"
     ],
     "agents": [
+      "CodeDesignSystemSpecialist",
       "CodeNextJsSpecialist",
       "CodeReactViteSpecialist"
     ]
@@ -71,8 +72,7 @@
       "Go Contract Validation"
     ],
     "agents": [
-      "CodeGeneralist",
-      "MultiLanguageBuilder"
+      "CodeGeneralist"
     ]
   },
   {

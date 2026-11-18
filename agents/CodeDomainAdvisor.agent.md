@@ -1,6 +1,7 @@
 ---
 name: "CodeDomainAdvisor"
-description: "Coding specialist-selection advisor for cross-stack work. Returns
+description: "Coding-domain selection advisor for product modernization,
+  architecture, rebuild and cross-stack work. Returns
   a routing decision only; never implements code or invokes agents."
 argument-hint: "Goal, stack, constraints, and candidate rows supplied from
   Orchestrator's embedded routing index."

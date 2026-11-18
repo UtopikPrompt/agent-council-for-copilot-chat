@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <!-- Visor Main Gradient -->
+    <linearGradient id="visorGrad" x1="0%" y1="30%" x2="100%" y2="70%">
+      <stop offset="0%" stop-color="#2299EE" />
+      <stop offset="35%" stop-color="#00E5FF" />
+      <stop offset="70%" stop-color="#2EE59D" />
+      <stop offset="100%" stop-color="#7B61FF" />
+    </linearGradient>
+
+    <!-- Visor Border Gradient -->
+    <linearGradient id="visorBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7CE8FF" />
+      <stop offset="50%" stop-color="#3BF5B0" />
+      <stop offset="100%" stop-color="#6A8BFF" />
+    </linearGradient>
+
+    <!-- Antenna & Stripe Accent Gradient -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00D2B8" />
+      <stop offset="100%" stop-color="#2B8CBE" />
+    </linearGradient>
+
+    <!-- Ear Module Gradient -->
+    <linearGradient id="earGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E6B9B" />
+      <stop offset="100%" stop-color="#48BFE3" />
+    </linearGradient>
+
+    <!-- Clip Path for Visor Gloss Reflection -->
+    <clipPath id="visorClip">
+      <polygon points="103,162 297,162 291,218 242,243 200,220 158,243 109,218" />
+    </clipPath>
+  </defs>
+
+  <!-- Outer Thick Dark Navy Silhouette -->
+  <path d="M 86,86 
+           L 116,138 
+           C 134,108 165,94 200,94 
+           C 235,94 266,108 284,138 
+           L 314,86 
+           L 314,195 
+           C 314,218 304,234 290,242 
+           L 262,286 
+           L 228,314 
+           L 172,314 
+           L 138,286 
+           L 110,242 
+           C 96,234 86,218 86,195 Z" 
+        fill="#0A192F" stroke="#0A192F" stroke-width="10" stroke-linejoin="round" />
+
+  <!-- Left Antenna -->
+  <polygon points="94,104 114,142 114,178 94,178" fill="url(#accentGrad)" />
+  <polygon points="94,104 103,121 103,178 94,178" fill="#4EF2C8" opacity="0.6" />
+
+  <!-- Right Antenna -->
+  <polygon points="306,104 286,142 286,178 306,178" fill="url(#accentGrad)" />
+  <polygon points="306,104 297,121 297,178 306,178" fill="#154D6E" opacity="0.5" />
+
+  <!-- Helmet Dome Base -->
+  <path d="M 118,154 C 122,114 156,100 200,100 C 244,100 278,114 282,154 Z" fill="#1D3554" />
+  
+  <!-- Top Helmet Highlight -->
+  <path d="M 152,107 C 167,101 183,100 200,100 C 217,100 233,101 248,107 C 232,111 216,112 200,112 C 184,112 168,111 152,107 Z" fill="#355882" />
+
+  <!-- Left Helmet Stripe -->
+  <polygon points="154,107 162,105 148,154 138,154" fill="url(#accentGrad)" />
+
+  <!-- Right Helmet Stripe -->
+  <polygon points="246,107 238,105 252,154 262,154" fill="url(#accentGrad)" />
+
+  <!-- Left Ear Piece -->
+  <path d="M 94,176 L 112,176 L 112,234 C 100,228 94,216 94,198 Z" fill="url(#earGrad)" />
+
+  <!-- Right Ear Piece -->
+  <path d="M 306,176 L 288,176 L 288,234 C 300,228 306,216 306,198 Z" fill="url(#earGrad)" />
+
+  <!-- Lower Jaw / Cheek Armor -->
+  <polygon points="116,225 284,225 256,280 225,306 175,306 144,280" fill="#162942" />
+  <polygon points="116,225 148,240 158,278 144,280" fill="#233E63" />
+  <polygon points="284,225 252,240 242,278 256,280" fill="#233E63" />
+
+  <!-- Chin Guard -->
+  <polygon points="175,288 225,288 218,306 182,306" fill="#254266" />
+
+  <!-- Faceplate / Mouth Guard -->
+  <polygon points="158,248 200,226 242,248 242,276 225,288 175,288 158,276" fill="#B8D4E8" />
+  <!-- Faceplate Subtle Shading -->
+  <polygon points="158,276 175,288 225,288 242,276 222,282 178,282" fill="#94B8D4" />
+
+  <!-- Visor Outer Rim -->
+  <polygon points="98,157 302,157 295,222 243,249 200,226 157,249 105,222" fill="url(#visorBorder)" />
+
+  <!-- Visor Inner Screen -->
+  <polygon points="104,163 296,163 290,217 242,242 200,219 158,242 110,217" fill="url(#visorGrad)" />
+
+  <!-- Visor Diagonal Gloss Reflection -->
+  <g clip-path="url(#visorClip)">
+    <polygon points="185,155 245,155 195,250 135,250" fill="#FFFFFF" opacity="0.28" />
+    <polygon points="255,155 272,155 222,250 205,250" fill="#FFFFFF" opacity="0.15" />
+  </g>
+</svg>

@@ -1,10 +1,17 @@
 {
     "name": "agent-roster-for-copilot-chat",
-    "displayName": "Agent Roster for Copilot Chat",
+    "displayName": "Aro: Agent Roster Orchestrator for Copilot Chat",
     "description": "A specialist agent roster and reusable workflow skills for GitHub Copilot Chat.",
     "icon": "assets/extension-icon.png",
     "version": "0.0.0",
     "publisher": "UtopikPrompt",
+    "main": "./src/extension.js",
+    "activationEvents": [
+        "onCommand:agentRoster.openModelLearning",
+        "onView:agentRoster.modelLearning",
+        "onLanguageModelTool:aroGetModelRecommendations",
+        "onLanguageModelTool:aroRecordModelOutcome"
+    ],
     "license": "PolyForm-Noncommercial-1.0.0",
     "engines": {
         "vscode": "^1.111.0"
@@ -33,6 +40,238 @@
         "package": "vsce package"
     },
     "contributes": {
+        "configuration": {
+            "title": "Agent Roster",
+            "properties": {
+                "agentRoster.modelLearning.localModelVendors": {
+                    "type": "array",
+                    "scope": "machine",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [],
+                    "description": "Exact VS Code vendor IDs for local model providers to include in Aro recommendations. Models from these vendors are treated as having zero token charges; hardware and energy costs are not estimated. Only add providers that run locally. Copilot models are always included."
+                }
+            }
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "agentRoster",
+                    "title": "Agent Roster",
+                    "icon": "assets/aro-wireframe.svg"
+                }
+            ]
+        },
+        "views": {
+            "agentRoster": [
+                {
+                    "id": "agentRoster.modelLearning",
+                    "name": "Aro Learning"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "agentRoster.openModelLearning",
+                "title": "Agent Roster: Open Aro Learning"
+            },
+            {
+                "command": "agentRoster.changeModelScope",
+                "title": "Agent Roster: Change Model Scope"
+            },
+            {
+                "command": "agentRoster.changeModelPriority",
+                "title": "Agent Roster: Change Model Priority"
+            }
+        ],
+        "languageModelTools": [
+            {
+                "name": "aroGetModelRecommendations",
+                "displayName": "Read Aro model recommendations",
+                "toolReferenceName": "aroGetModelRecommendations",
+                "canBeReferencedInPrompt": true,
+                "userDescription": "Read locally learned model recommendations for an activity, domain, and difficulty.",
+                "modelDescription": "Read Aro's profile-local outcomes and cloud/local scope and priority for the given activity, domain, and difficulty. Uses exact and cautiously weighted related evidence, labels pooled evidence, and returns a bounded shortlist with an opaque per-recommendation callId for outcome correlation. For confirmed unavailability, requery with exact model/vendor pairs or provider IDs excluded; exclusions apply only to this request. Never bypass scope or priority. Does not read the user's chat model, send prompts to models, or change Aro's main model.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "activity": {
+                            "type": "string",
+                            "enum": [
+                                "advise",
+                                "implement",
+                                "analyze",
+                                "review",
+                                "document",
+                                "operate"
+                            ]
+                        },
+                        "domain": {
+                            "type": "string",
+                            "enum": [
+                                "coding",
+                                "business",
+                                "documentation-governance",
+                                "infrastructure",
+                                "cross-domain"
+                            ]
+                        },
+                        "difficulty": {
+                            "type": "string",
+                            "enum": [
+                                "simple",
+                                "standard",
+                                "complex"
+                            ]
+                        },
+                        "excludedModels": {
+                            "type": "array",
+                            "maxItems": 20,
+                            "description": "Exact model ID and vendor pairs confirmed unavailable for this dispatch; not persisted.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 300
+                                    },
+                                    "vendor": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 300
+                                    }
+                                },
+                                "required": [
+                                    "id",
+                                    "vendor"
+                                ],
+                                "additionalProperties": false
+                            }
+                        },
+                        "excludedProviders": {
+                            "type": "array",
+                            "maxItems": 20,
+                            "description": "Exact VS Code vendor IDs confirmed unavailable as a whole for this dispatch; not a billing-account identifier.",
+                            "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                            }
+                        }
+                    },
+                    "required": [
+                        "activity",
+                        "domain",
+                        "difficulty"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            {
+                "name": "aroRecordModelOutcome",
+                "displayName": "Record Aro model outcome",
+                "toolReferenceName": "aroRecordModelOutcome",
+                "canBeReferencedInPrompt": true,
+                "userDescription": "Record a verified model outcome for an activity, domain, and difficulty.",
+                "modelDescription": "Update Aro's local scorecard after an advisor or specialist call. Record success only after acceptance checks pass. Record failure only when concrete evidence attributes an incorrect, incomplete, acceptance-failing, or unsafe result to the requested model. Do not blame the model for missing input, incorrect routing, tool failure, rejected requests, or environment issues. Never send prompts or response text. Include optional measured duration or cost only when the runtime provides trustworthy values.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "activity": {
+                            "type": "string",
+                            "enum": [
+                                "advise",
+                                "implement",
+                                "analyze",
+                                "review",
+                                "document",
+                                "operate"
+                            ]
+                        },
+                        "domain": {
+                            "type": "string",
+                            "enum": [
+                                "coding",
+                                "business",
+                                "documentation-governance",
+                                "infrastructure",
+                                "cross-domain"
+                            ]
+                        },
+                        "difficulty": {
+                            "type": "string",
+                            "enum": [
+                                "simple",
+                                "standard",
+                                "complex"
+                            ]
+                        },
+                        "modelId": {
+                            "type": "string",
+                            "maxLength": 300
+                        },
+                        "callId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100,
+                            "description": "Opaque ID returned by the recommendation call for this dispatch."
+                        },
+                        "outcome": {
+                            "type": "string",
+                            "enum": [
+                                "success",
+                                "failure"
+                            ]
+                        },
+                        "evidenceCode": {
+                            "type": "string",
+                            "enum": [
+                                "acceptance_passed",
+                                "incorrect",
+                                "incomplete",
+                                "acceptance_failed",
+                                "unsafe"
+                            ]
+                        },
+                        "worker": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "agent": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "metrics": {
+                            "type": "object",
+                            "properties": {
+                                "durationMs": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 604800000
+                                },
+                                "costUsd": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1000000
+                                }
+                            },
+                            "additionalProperties": false
+                        }
+                    },
+                    "required": [
+                        "activity",
+                        "domain",
+                        "difficulty",
+                        "modelId",
+                        "outcome",
+                        "evidenceCode"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        ],
         "chatAgents": [
             {
                 "path": "./agents/AgentOptimizer.agent.md"

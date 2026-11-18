@@ -187,6 +187,20 @@ missing-input requests to Orchestrator; never invoke workers or implement code.
   technical detail; missing historical source is not proof the target requirement
   is unspecified. Block only the affected decision or slice, not independent work.
 
+## Optional Application Disposition (7 Rs)
+- Include a 7 Rs assessment only when requested or useful for an in-scope application/workload
+  migration decision; do not make it a mandatory phase or apply it to individual features.
+- Use and define the selected taxonomy: Retain, Retire, Rehost, Relocate, Repurchase,
+  Replatform, and Refactor/Re-architect. If the user or source uses a different variant,
+  preserve its terms and explain the mapping rather than silently mixing taxonomies.
+- For each assessed application/workload, record evidence, candidate disposition,
+  rationale, constraints, alternatives, dependencies, risks, confidence, decision status,
+  and unresolved questions. Tie proposed dispositions to architecture options and
+  roadmap work packages; request missing technical evidence from the owning specialist.
+- Treat every disposition as a proposal. A category label alone does not establish
+  feasibility, approval, cost, schedule, or readiness; do not force a choice when evidence
+  is insufficient.
+
 ## Portable Rebuild Specification
 - The deliverable must be usable in a fresh repository without access to the
   original source tree, historical documentation paths or this conversation.

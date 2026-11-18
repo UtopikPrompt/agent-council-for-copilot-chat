@@ -4,6 +4,57 @@ Aro is the dispatcher. Advisors select a worker without tools; workers do not de
 
 Workers keep one skill-loading policy per consuming agent and load required skills from runtime-discovered locations, not paths guessed from the target workspace. Missing procedures return to Aro for resolution. Read-only assessment workers return complete content; Aro arranges advisor-selected documentation persistence and verifies saved artifacts without granting analysts edit tools.
 
+## Aro Routing
+
+Aro consults the relevant advisor before every specialist call, even when the right specialist seems obvious. If an advisor cannot recommend a valid worker, Aro corrects the candidate scope or asks for clarification; it does not skip advisor selection.
+
+```mermaid
+sequenceDiagram
+	actor U as You
+	participant Aro
+	participant Advisor as Relevant advisor
+	participant W1 as Specialist A
+	participant W2 as Specialist B
+
+	U->>Aro: Describe a task
+	Aro->>Aro: Scope request and split composite work
+
+	alt One specialist
+		Aro->>Advisor: Send task and candidate routes
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>Aro: Validate worker and consult model recommendations
+		Aro->>W1: Send scoped task when supported
+		W1-->>Aro: Return result and evidence
+		Aro->>Aro: Check acceptance and record eligible outcome
+	else Independent subtasks
+		par Subtask A
+			Aro->>Advisor: Consult for this specialist call
+			Advisor-->>Aro: Recommend one indexed worker
+			Aro->>W1: Send scoped subtask when supported
+			W1-->>Aro: Return result and evidence
+		and Subtask B
+			Aro->>Advisor: Consult for this specialist call
+			Advisor-->>Aro: Recommend one indexed worker
+			Aro->>W2: Send scoped subtask when supported
+			W2-->>Aro: Return result and evidence
+		end
+	else Dependent or overlapping subtasks
+		Aro->>Advisor: Consult for prerequisite specialist call
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>W1: Send prerequisite subtask
+		W1-->>Aro: Return result and evidence
+		Aro->>Advisor: Consult for dependent call with required delta
+		Advisor-->>Aro: Recommend one indexed worker
+		Aro->>W2: Send dependent subtask
+		W2-->>Aro: Return result and evidence
+	end
+
+	Aro->>Aro: Validate and reconcile results
+	Aro-->>U: Return outcome, checks, and limitations
+```
+
+Before each advisor and specialist call, Aro consults the profile-local learning tool for that call's role and task category, independently of the chat model. It considers the bounded shortlist, selected cloud/local scope and priority, and permitted exploration. A configured or fallback model must be eligible within that scope; if scope cannot be verified or no suitable model is available, Aro reports the limitation. Confirmed provider or model availability failures can trigger bounded re-queries with request-local exclusions; Aro does not repeat uncertain side effects or treat provider failures as model-quality failures. Advisor decisions are recorded only when correctness can be independently verified, not merely because the response is valid JSON. The requested model is not proof of runtime resolution; report resolution only when runtime telemetry confirms it. See [Aro Model Learning](../README.md#aro-model-learning-experimental) for inventory, privacy and limitations.
+
 | Agent | Purpose |
 | --- | --- |
 | [AgentOptimizer](../agents/AgentOptimizer.agent.md) | Analyze and optimize a VS Code agent (its definition, tools, description/WHEN trigger, skills, and instructions) for the explicitly named target agent, or the active agent when no target was supplied. Definition files may be inside the open workspace. Invoke when an agent won't load, ignores instructions, fails to invoke tools/skills, has broken base-on-context features, shows slow, unexpected behavior, or routes tasks poorly. Used especially from remote SSH sessions where local skill files are not available.  |
@@ -16,7 +67,7 @@ Workers keep one skill-loading policy per consuming agent and load required skil
 | [CodeContextSchemaAuditor](../agents/CodeContextSchemaAuditor.agent.md) | Read-only audit of database/API schemas, internal component and external-system dependencies, configuration and environment constraints for design or an As-Is System Reference; returns evidence-linked boundaries and gaps. |
 | [CodeDatabaseORMGenerator](../agents/CodeDatabaseORMGenerator.agent.md) | Specialized for database schema and ORM setup. Handles SQL/ORM scaffolding, migrations, indexes, constraints, connection pooling, seeding, and query patterns. Supports PostgreSQL, MySQL, SQLite, and MariaDB with SQLAlchemy (Python), Prisma (Node.js), Hibernate/JPA (Java), and Eloquent (PHP). |
 | [CodeDesignSystemSpecialist](../agents/CodeDesignSystemSpecialist.agent.md) | Specialized for building shared UI component libraries and design systems. Creates reusable components, theming/tokens, state management patterns, and documentation. Supports React, Vue, and Angular component libraries with theming, prop types, and accessibility. |
-| [CodeDomainAdvisor](../agents/CodeDomainAdvisor.agent.md) | Coding specialist-selection advisor for cross-stack work. Returns a routing decision only; never implements code or invokes agents. |
+| [CodeDomainAdvisor](../agents/CodeDomainAdvisor.agent.md) | Coding-domain selection advisor for product modernization, architecture, rebuild and cross-stack work. Returns a routing decision only; never implements code or invokes agents. |
 | [CodeExpressSpecialist](../agents/CodeExpressSpecialist.agent.md) | Implement, review and debug Express APIs using existing repository conventions; scaffold only when initialization is requested. Covers routes, middleware, validation, authorization, error handling and persistence integration. |
 | [CodeFastApiSpecialist](../agents/CodeFastApiSpecialist.agent.md) | Specialized for backend API scaffolding with FastAPI, Pydantic, SQLAlchemy, and pytest. Handles OpenAPI spec generation, dependency injection patterns, and async database setup. |
 | [CodeFrameworkDiagnostician](../agents/CodeFrameworkDiagnostician.agent.md) | Local error parser and dependency validation expert configured to solve complex framework bugs without active web browsing tools. |
@@ -54,4 +105,4 @@ Workers keep one skill-loading policy per consuming agent and load required skil
 | [InfraTestInfrastructureGenerator](../agents/InfraTestInfrastructureGenerator.agent.md) | Generate test suites, fixtures, mocks, coverage and testing-specific CI gates; run scoped tests only when execution is authorized. Failing-job diagnosis and deployment stages remain with their dedicated workers. |
 | [MultiLanguageBuilder](../agents/MultiLanguageBuilder.agent.md) | Handles polyglot builds across Python/Node.js/TypeScript with polyglot package management (pip/pnpm/yarn). Manages workspace isolation, version pinning, and cross-language dependency resolution. |
 | [Aro](../agents/Aro.agent.md) | Orchestrator for advisor-led specialist selection, scoped dispatch, model selection, sequencing, and result synthesis. Never acts as the worker. |
-| [UtilityAdvisor](../agents/UtilityAdvisor.agent.md) | Utility specialist-selection advisor for agent diagnostics, architectural alternatives, and checkpoint summaries. Returns a decision only. |
+| [UtilityAdvisor](../agents/UtilityAdvisor.agent.md) | Utility specialist-selection advisor for agent diagnostics, divergent brainstorming, and checkpoint summaries. Returns a decision only. |
