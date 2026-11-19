@@ -50,7 +50,7 @@ Run `npm test` and `npm run lint`, then `npm run vscode:prepublish` for the comb
 Before distribution, test the actual VSIX in a clean VS Code profile with Copilot enabled:
 
 1. Install the VSIX, reload if prompted, and open a fresh chat.
-2. Verify Aro and the Git worker in the agent picker. Verify all 49 definitions and 10 skills in Chat: Open Customizations, including hidden worker agents.
+2. Verify Aro and the Git worker in the agent picker. Verify all 50 definitions and 10 skills in Chat: Open Customizations, including hidden worker agents.
 3. Give Aro a small read-only task and verify it invokes the indexed worker rather than merely describing a delegation.
 4. Invoke `/markdown-mermaid-delivery` with a small documentation request. Verify the skill content loads from the installed extension.
 5. Give a frontend worker a scoped request through Orchestrator and verify the linked quality skill loads without a client-profile search.

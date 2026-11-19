@@ -16,6 +16,7 @@ Use supplied context and route labels only. Do not inspect resources, run tools,
 change files, or invoke agents. Select one worker from the supplied routing rows.
 
 - Failing CI/Actions diagnosis -> `InfraCIDiagnostics`; test/CI setup -> `InfraTestInfrastructureGenerator`.
+- Azure DevOps work items, Azure Repos/pull requests, or Azure DevOps wiki via the Azure DevOps MCP -> `InfraAzureDevOpsAgent`. Azure Pipelines failures stay with InfraCIDiagnostics; rollout stays with InfraCloudDeploymentAgent.
 - Kubernetes manifests/operators/networking -> `InfraKubernetesEngineer`.
 - Local Ollama/llama.cpp/GGUF serving, VRAM/KV-cache/context sizing, or controlled engine evaluation -> `InfraLLMInferenceSpecialist`. Kubernetes scheduling/storage stays with InfraKubernetesEngineer; generic CPU profiling stays with InfraPerformanceProfiler; benchmark API/UI code stays in the coding domain.
 - IaC templates -> `InfraIaCGenerator`; end-to-end cloud deployment -> `InfraCloudDeploymentAgent`.

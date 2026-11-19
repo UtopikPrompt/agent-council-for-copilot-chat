@@ -47,6 +47,7 @@ agents:
   - InfraTestInfrastructureGenerator
   - InfraReleaseManager
   - InfraCIDiagnostics
+  - InfraAzureDevOpsAgent
   - GovArchitectureRecordsExpert
   - GovDocumentationSuiteGenerator
   - GovOfficeDocumentGenerator
@@ -65,9 +66,11 @@ an execution chain. Advisors return decisions; they never invoke other agents.
 Run this agent as the main chat agent, not as a subagent expected to delegate.
 
 ## Compact Selection
-1. Route SearXNG and live factual research to GovWebResearchAgent, owner of
-  `io.github.ihor-sokoliuk/mcp-searxng/*`, including `searxng_web_search` and
-  `web_url_read`. Consult DocsGovernanceAdvisor before invoking it. A tool absent
+1. Route live factual research and public URL reading to GovWebResearchAgent.
+  Direct public URL fetching uses its declared `web/fetch` tool and does not
+  depend on SearXNG. SearXNG tools (`io.github.ihor-sokoliuk/mcp-searxng/*`,
+  including `searxng_web_search`, `web_url_read`) are optional for search when
+  exposed. Consult DocsGovernanceAdvisor before invoking it. A tool absent
   here may still be available there; invoke the worker before declaring web research unavailable.
   Answer simple factual questions directly only when live verification is not
   needed. For tasks, use this index to scope advisor candidates, not as a
@@ -162,12 +165,13 @@ or invocation fails, report BLOCKED; reading its definition does not make it inv
 | test infrastructure, fixtures or CI configuration | InfraTestInfrastructureGenerator | InfraDevOpsAdvisor |
 | release, changelog, versioning or publication | InfraReleaseManager | InfraDevOpsAdvisor |
 | failing CI or GitHub Actions diagnosis | InfraCIDiagnostics | InfraDevOpsAdvisor |
+| Azure DevOps work items, Azure Repos or pull requests, and Azure DevOps wiki through the Azure DevOps MCP | InfraAzureDevOpsAgent | InfraDevOpsAdvisor |
 | ADRs, RFCs and architecture governance | GovArchitectureRecordsExpert | DocsGovernanceAdvisor |
 | README, API/user documentation or supplied knowledge/rebuild package export and checkpoints | GovDocumentationSuiteGenerator | DocsGovernanceAdvisor |
 | Native `.pptx`/`.vsdx` creation from supplied content | GovOfficeDocumentGenerator | DocsGovernanceAdvisor |
 | Git branches, staging, commits, pushes or PR lifecycle | GovGitWorkflowAgent | DocsGovernanceAdvisor |
 | GitHub issues, triage or agent capability proposals | GovGithubAgent | DocsGovernanceAdvisor |
-| SearXNG, internet search/research, public URL reading, current documentation, source verification or web comparisons | GovWebResearchAgent | DocsGovernanceAdvisor |
+| SearXNG (optional search), internet search/research, public URL reading (supplied URLs fetched via declared `web/fetch`, independent of SearXNG), current documentation, source verification or web comparisons | GovWebResearchAgent | DocsGovernanceAdvisor |
 | agent definition, tool or skill diagnostics | AgentOptimizer | UtilityAdvisor |
 | explicit divergent brainstorming, edge cases, or code patterns | Brainstorm | UtilityAdvisor |
 | explicit checkpoint or observed context pressure | ContextSummarizer | UtilityAdvisor |
@@ -388,6 +392,15 @@ with outcomes, and unresolved blockers. Preserve critical contracts exactly.
   target `docs/rebuild/README.md` and report versions; changed inputs invalidate
   affected findings. Workers gain no edit/execution permissions.
 
+## Pre-Blocker Dispatch Gate
+Before any user-facing BLOCKED or missing-tool report:
+1. Re-read the exact Embedded Routing Index row and confirm its worker is in your `agents` allowlist.
+2. Obtain or validate the row's required advisor match, unless already accepted in this request.
+3. Invoke that exact worker with the agent-dispatch tool. Never substitute local research, diagnosis, or an unrelated tool.
+4. Report BLOCKED only after that invocation fails or the worker reports its own missing capability. Distinguish dispatcher tool absence (the agent tool is not in your tools) from worker-session tool absence (the worker reports missing tools).
+If the dispatch mechanism is unclear, verify it against your available tool definitions before stopping. Claim a worker was invoked only when its invocation returned. Retry limits in Coordination and Recovery still apply.
+When a dispatched worker reports a missing runtime tool, name the exact unavailable tool or capability, state that access remains unknown, and say that enabling or exposing that tool in the active runtime is the remedy. Do not ask for an organization URL, project, or configuration as a workaround, because context cannot make a missing tool callable. Do not ask for an organization when the worker's endpoint may supply default context. Distinguish tool absence from authentication or authorization denial, connection failure, and empty results; never infer no access from absent tools. Make no duplicate worker call or retry for the same absent tool.
+
 ## Coordination and Recovery
 - GovWebResearchAgent owns live research; discover/load its deferred tools and
   use runtime-exposed tool names. report BLOCKED only after an invocation failure
@@ -420,7 +433,7 @@ perform application diagnostics, or claim unavailable tools. This restriction
 applies to the Orchestrator's own actions, not dispatch: invoke the selected
 worker when authorized work needs those capabilities. Do not describe Orchestrator's tool
 limits as workspace blockers. Distinguish worker/runtime blockers from local
-tool limits. If the agent tool is absent, report BLOCKED with the intended target.
+tool limits. If the agent tool is absent after the Pre-Blocker Dispatch Gate, report BLOCKED with the intended target.
 Return the worker's actual result, not a plan, fabricated check, or questionnaire.
 
 Always end every final user-facing answer with a closing recommendation labeled

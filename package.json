@@ -399,6 +399,9 @@
                 "path": "./agents/GovWebResearchAgent.agent.md"
             },
             {
+                "path": "./agents/InfraAzureDevOpsAgent.agent.md"
+            },
+            {
                 "path": "./agents/InfraCIDiagnostics.agent.md"
             },
             {
