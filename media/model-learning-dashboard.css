@@ -76,6 +76,12 @@ button:disabled {
     justify-content: space-between;
 }
 
+.advisor-default {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
 .page-tabs {
     border-bottom: 1px solid var(--border);
     display: flex;

@@ -12,6 +12,7 @@ const {
     recordOutcome,
     TASK_CATEGORIES
 } = require('./model-learning');
+const { ADVISOR_PINNED_MODEL_KEY, getAdvisorFilteredModels, getAdvisorPinnedModel } = require('./advisor-pinning');
 
 const LEARNING_STORAGE_KEY = 'agentRoster.modelLearning.scorecard.v1';
 const INVENTORY_STORAGE_KEY = 'agentRoster.modelLearning.inventory.v1';
@@ -74,6 +75,55 @@ function refreshLearningViews() {
     for (const refresh of dashboardRefreshers) void refresh();
 }
 
+const ADVISOR_PIN_DIFFICULTIES = ['simple', 'standard', 'complex'];
+
+// Validates a pin against current availability, scope, selection, exclusions and every task difficulty before storing it.
+async function applyAdvisorPinnedModel(context, pin, exclusions = {}) {
+    if (pin === null) {
+        await context.globalState.update(ADVISOR_PINNED_MODEL_KEY, null);
+        return;
+    }
+    if (!pin || typeof pin !== 'object' || typeof pin.modelId !== 'string' || !pin.modelId || typeof pin.vendor !== 'string' || !pin.vendor) {
+        throw new Error('Invalid advisor model.');
+    }
+    const models = await selectChatModelsWithTimeout();
+    const policy = getInventoryPolicy(context);
+    const scope = effectiveModelScope(models, policy);
+    if (!models.some(model => model.id === pin.modelId && model.vendor === pin.vendor)) {
+        throw new Error('Advisor model is not currently available. Refresh the inventory.');
+    }
+    const eligibleForEveryDifficulty = ADVISOR_PIN_DIFFICULTIES.every(difficulty => {
+        const eligible = selectModels(models, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: difficulty });
+        return excludeUnavailableModels(eligible, exclusions).some(model => model.id === pin.modelId && model.vendor === pin.vendor);
+    });
+    if (!eligibleForEveryDifficulty) {
+        throw new Error('Advisor model is not eligible for the current scope, selection, exclusions, and every task difficulty.');
+    }
+    await context.globalState.update(ADVISOR_PINNED_MODEL_KEY, { modelId: pin.modelId, vendor: pin.vendor });
+}
+
+async function pinAdvisorModel(context) {
+    try {
+        const models = await selectChatModelsWithTimeout();
+        const choices = models.map(model => ({
+            label: `${model.name} (${model.vendor})`,
+            value: { modelId: model.id, vendor: model.vendor }
+        }));
+        choices.push({ label: 'Use learned recommendation (no pin)', value: null });
+        const choice = await vscode.window.showQuickPick(choices, {
+            title: 'Pin advisor model',
+            placeHolder: 'Select a model for advisor recommendations or clear the pin'
+        });
+        if (!choice) return;
+        await enqueueInventoryUpdate(async () => {
+            await applyAdvisorPinnedModel(context, choice.value);
+            refreshLearningViews();
+        });
+    } catch (error) {
+        void vscode.window.showErrorMessage(`Could not pin advisor model: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
 function createLearningSidebar(context) {
     const changes = new vscode.EventEmitter();
     const refresh = () => changes.fire();
@@ -106,6 +156,8 @@ function createLearningSidebar(context) {
             const scopeLabel = { cloud: 'Cloud only', local: 'Local only', both: 'Both' }[summary.scope];
             rows.push(item('Scope', scopeLabel, 'settings-gear', 'agentRoster.changeModelScope'));
             rows.push(item('Priority', summary.scope === 'both' ? policy.priority === 'local-first' ? 'Local first' : 'Cloud first' : 'Not applicable', 'arrow-swap', summary.scope === 'both' ? 'agentRoster.changeModelPriority' : undefined));
+            const pinned = getAdvisorPinnedModel(context);
+            rows.push(item('Advisor model', pinned ? pinned.modelId : 'Learned recommendation', 'pin', 'agentRoster.pinAdvisorModel'));
             rows.push(item('Selected models', `${summary.cloudCount} cloud / ${summary.localCount} local`, 'checklist', openDashboard));
             if (summary.unknownCount) rows.push(item('Unclassified selected', String(summary.unknownCount), 'warning', openDashboard));
             rows.push(item('Unrated local', String(summary.unratedLocalCount), summary.unratedLocalCount ? 'warning' : 'check', openDashboard));
@@ -188,6 +240,7 @@ function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand('agentRoster.openModelLearning', () => openModelLearning(context)));
     context.subscriptions.push(vscode.commands.registerCommand('agentRoster.changeModelScope', () => changeModelScope(context)));
     context.subscriptions.push(vscode.commands.registerCommand('agentRoster.changeModelPriority', () => changeModelPriority(context)));
+    context.subscriptions.push(vscode.commands.registerCommand('agentRoster.pinAdvisorModel', () => pinAdvisorModel(context)));
     const sidebar = createLearningSidebar(context);
     context.subscriptions.push(sidebar, vscode.window.registerTreeDataProvider('agentRoster.modelLearning', sidebar));
     if (typeof vscode.lm.onDidChangeChatModels === 'function') context.subscriptions.push(vscode.lm.onDidChangeChatModels(refreshLearningViews));
@@ -206,9 +259,9 @@ function registerModelLearningTools(context) {
             const availableModels = await vscode.lm.selectChatModels();
             const scope = effectiveModelScope(availableModels, policy);
             const eligibleModels = selectModels(availableModels, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: input.difficulty });
-            const models = excludeUnavailableModels(eligibleModels, { excludedModels: input.excludedModels, excludedProviders: input.excludedProviders });
-            const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
             const manualSelection = getManualSelection(getManualSelections(context), input);
+            const models = getAdvisorFilteredModels(context, excludeUnavailableModels(eligibleModels, { excludedModels: input.excludedModels, excludedProviders: input.excludedProviders }), policy, input, manualSelection);
+            const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
             const recommendations = getModelRecommendations(scorecard, {
                 ...input,
                 manualSelection,
@@ -332,6 +385,7 @@ function openModelLearning(context) {
                     getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
                     preference: scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined
                 }),
+                pinnedAdvisorModel: getAdvisorPinnedModel(context),
                 recordCount: scorecard.records.length
             });
         })().catch(error => {
@@ -349,6 +403,19 @@ function openModelLearning(context) {
     dashboardRefreshers.add(refresh);
     panel.webview.onDidReceiveMessage(message => {
         if (message.type === 'ready' || message.type === 'refreshLearning') void refresh();
+        if (message.type === 'setAdvisorPinnedModel') {
+            void enqueueInventoryUpdate(async () => {
+                await applyAdvisorPinnedModel(context, message.model, {
+                    excludedModels: message.excludedModels,
+                    excludedProviders: message.excludedProviders
+                });
+                if (refreshPromise) await refreshPromise;
+                refreshLearningViews();
+            }).catch(error => {
+                panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
+            });
+            return;
+        }
         if (['chooseManualModel', 'useLearnedModel'].includes(message.type)) {
             void enqueueInventoryUpdate(async () => {
                 const learningContext = {
@@ -512,7 +579,7 @@ function getLearningHtml(webview, extensionUri) {
                 <button id="view-tab-inventory" type="button" role="tab" aria-selected="false" aria-controls="inventory-view" data-view="inventory" tabindex="-1">Model inventory <span id="model-count">0 models</span></button>
             </div>
         <section id="recommendations-view" class="view-panel" role="tabpanel" aria-labelledby="view-tab-recommendations">
-            <div class="toolbar"><h2>Learned recommendations</h2><button id="refresh-learning" type="button">Refresh</button></div>
+            <div class="toolbar"><h2>Learned recommendations</h2><div class="advisor-default"><label for="advisor-default-model">Aro &amp; advisors default</label><select id="advisor-default-model"></select></div><button id="refresh-learning" type="button">Refresh</button></div>
             <fieldset class="scope-controls" id="model-scope"><legend>Model scope</legend><label><input type="radio" name="model-scope" value="cloud"> Cloud only</label><label><input type="radio" name="model-scope" value="local" disabled> Local only</label><label><input type="radio" name="model-scope" value="both" disabled> Both</label><label for="model-priority">Priority <select id="model-priority" disabled><option value="cloud-first">Cloud first</option><option value="local-first">Local first</option></select></label></fieldset>
             <fieldset class="context-controls" id="learning-context"><legend>Filter recommendation table</legend><div class="activity-filter"><span id="domain-filter-label">Domain</span><div id="domain-tabs" class="activity-tabs" role="tablist" aria-labelledby="domain-filter-label"></div></div><div class="activity-filter"><span id="activity-filter-label">Activity</span><div id="activity-tabs" class="activity-tabs" role="tablist" aria-labelledby="activity-filter-label"></div></div></fieldset>
             <p id="context-count" class="context-count" aria-live="polite"></p>

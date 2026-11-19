@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import learningModule from '../src/model-learning.js';
 import pricingModule from '../src/model-pricing.js';
-
+import advisorPinning from '../src/advisor-pinning.js';
 const { compactModelRecommendations, emptyScorecard, excludeUnavailableModels, getContextualLearningDashboard, getLearningDashboard, getModelRecommendations, normalizeScorecard, recordOutcome } = learningModule;
 const getPricing = model => ({ inputCost: model.inputCost, outputCost: model.outputCost, budgetClass: model.budgetClass });
 
@@ -458,4 +458,63 @@ test('manual model selections override only the exact context and preserve the s
     });
     assert.equal(unavailable.recommendedModelId, null);
     assert.equal(unavailable.selectionMode, 'manual-unavailable');
+});
+
+// --- Test pinned model functionality ---
+
+test('pinned model for advisors is persisted', () => {
+    const context = { globalState: { get: () => ({ modelId: 'test-model', vendor: 'test-vendor' }) } };
+    const result = advisorPinning.getAdvisorPinnedModel(context);
+    assert.deepEqual(result, { modelId: 'test-model', vendor: 'test-vendor' });
+    
+    // Test fallback to null if no pinned model
+    context.globalState.get = () => null;
+    assert.strictEqual(advisorPinning.getAdvisorPinnedModel(context), null);
+});
+
+test('pinned model precedence in model recommendations', () => {
+    const context = { globalState: { get: () => ({ modelId: 'pinned-model', vendor: 'test-vendor' }) } };
+    
+    const models = [
+        { id: 'pinned-model', vendor: 'test-vendor', name: 'Pinned Model', inputCost: 0, outputCost: 0 },
+        { id: 'other-model', vendor: 'other-vendor', name: 'Other Model', inputCost: 10, outputCost: 50 }
+    ];
+    
+    const policy = { scope: 'both', localModelVendors: [], classifications: {}, providerTypes: {}, selections: {} };
+    const taskContext = { activity: 'advise', domain: 'coding', difficulty: 'simple' };
+    
+    const filteredModels = advisorPinning.getAdvisorFilteredModels(context, models, policy, taskContext);
+    assert.strictEqual(filteredModels.length, 1);
+    assert.strictEqual(filteredModels[0].id, 'pinned-model');
+});
+
+test('fallback to learned recommendations when pinned model is unavailable', () => {
+    const context = { globalState: { get: () => ({ modelId: 'unavailable-model', vendor: 'test-vendor' }) } };
+    
+    const models = [
+        { id: 'other-model', vendor: 'other-vendor', name: 'Other Model', inputCost: 10, outputCost: 50 }
+    ];
+    
+    const policy = { scope: 'both', localModelVendors: [], classifications: {}, providerTypes: {}, selections: {} };
+    const taskContext = { activity: 'advise', domain: 'coding', difficulty: 'simple' };
+    
+    const filteredModels = advisorPinning.getAdvisorFilteredModels(context, models, policy, taskContext);
+    assert.strictEqual(filteredModels.length, 1);
+    assert.strictEqual(filteredModels[0].id, 'other-model');
+});
+
+test('manual selections for an advisor context outrank the pinned default', () => {
+    const context = { globalState: { get: () => ({ modelId: 'pinned-model', vendor: 'test-vendor' }) } };
+
+    const models = [
+        { id: 'pinned-model', vendor: 'test-vendor', name: 'Pinned Model', inputCost: 0, outputCost: 0 },
+        { id: 'manual-model', vendor: 'other-vendor', name: 'Manual Model', inputCost: 10, outputCost: 50 }
+    ];
+
+    const policy = { scope: 'both', localModelVendors: [], classifications: {}, providerTypes: {}, selections: {} };
+    const taskContext = { activity: 'advise', domain: 'coding', difficulty: 'simple' };
+    const manualSelection = { activity: 'advise', domain: 'coding', difficulty: 'simple', modelId: 'manual-model', vendor: 'other-vendor' };
+
+    const filteredModels = advisorPinning.getAdvisorFilteredModels(context, models, policy, taskContext, manualSelection);
+    assert.deepEqual(filteredModels.map(model => model.id), ['pinned-model', 'manual-model']);
 });
