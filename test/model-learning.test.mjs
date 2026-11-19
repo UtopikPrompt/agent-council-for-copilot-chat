@@ -89,6 +89,20 @@ test('sidebar inventory summary counts only selected cloud and unrated local mod
     assert.equal(pricingModule.getInventorySummary(models, policy).scope, 'cloud');
 });
 
+test('sidebar inventory summary ignores selected models from providers disabled by policy', () => {
+    const models = [
+        { id: 'cloud', vendor: 'copilot' },
+        { id: 'local', vendor: 'ollama' }
+    ];
+    const policy = {
+        scope: 'both', localModelVendors: ['ollama'], classifications: {}, providerTypes: {},
+        selections: {}, localTiers: {}, providerAvailability: { mode: 'inherit', enabledProviders: [], disabledProviders: ['ollama'] }
+    };
+    assert.deepEqual(pricingModule.getInventorySummary(models, policy), {
+        scope: 'cloud', hasLocal: false, cloudCount: 1, localCount: 0, unknownCount: 0, unratedLocalCount: 0
+    });
+});
+
 test('Copilot and Copilot CLI remain cloud despite stored local overrides', () => {
     for (const vendor of ['copilot', 'copilotcli']) {
         const model = { id: 'model', vendor, inputCost: 10, outputCost: 50 };
@@ -139,6 +153,108 @@ test('local-first and cloud-first prefer eligible priced models and fall back wh
     assert.equal(getModelRecommendations(emptyScorecard(), { ...options, models: [models[0]], preference: 'local' }).recommendedModelId, 'cloud');
     const unpricedCloud = { id: 'unpriced', vendor: 'copilot' };
     assert.equal(getModelRecommendations(emptyScorecard(), { ...options, models: [unpricedCloud, models[1]], preference: 'cloud' }).recommendedModelId, 'local');
+});
+
+test('workspace preference is absent or invalid by default and leaves recommendations unchanged', () => {
+    const models = [
+        { id: 'cheap', vendor: 'copilot', inputCost: 1, outputCost: 2 },
+        { id: 'other', vendor: 'other', inputCost: 10, outputCost: 50 }
+    ];
+    const options = { role: 'coding', taskCategory: 'simple', models, getPricing };
+    assert.equal(getModelRecommendations(emptyScorecard(), options).recommendedModelId, 'cheap');
+    for (const workspacePreference of [undefined, { preferredProvider: '', preferredModel: '' }, { preferredProvider: [], preferredModel: [] }]) {
+        const result = getModelRecommendations(emptyScorecard(), { ...options, workspacePreference });
+        assert.equal(result.recommendedModelId, 'cheap');
+        assert.deepEqual(result.workspacePreference, { status: 'not-configured' });
+    }
+    const modelOnly = getModelRecommendations(emptyScorecard(), { ...options, workspacePreference: { preferredProvider: '', preferredModel: 'other' } });
+    assert.equal(modelOnly.recommendedModelId, 'cheap');
+    assert.deepEqual(modelOnly.workspacePreference, { status: 'invalid' });
+});
+
+test('a workspace provider preference orders eligible models and reports when applied', () => {
+    const models = [
+        { id: 'cheap', vendor: 'copilot', inputCost: 1, outputCost: 2 },
+        { id: 'preferred', vendor: 'other', inputCost: 10, outputCost: 50 }
+    ];
+    const result = getModelRecommendations(emptyScorecard(), {
+        role: 'coding', taskCategory: 'simple', models, getPricing,
+        workspacePreference: { preferredProvider: 'other', preferredModel: '' }
+    });
+    assert.equal(result.recommendedModelId, 'preferred');
+    assert.deepEqual(result.workspacePreference, { status: 'applied', vendor: 'other', modelId: null });
+    assert.deepEqual(compactModelRecommendations(result).workspacePreference, result.workspacePreference);
+});
+
+test('an exact workspace model preference requires the matching provider', () => {
+    const models = [
+        { id: 'cheap', vendor: 'copilot', inputCost: 1, outputCost: 2 },
+        { id: 'pricey', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'pricey', vendor: 'other', inputCost: 10, outputCost: 50 }
+    ];
+    const options = { role: 'coding', taskCategory: 'simple', models, getPricing };
+    const exact = getModelRecommendations(emptyScorecard(), { ...options, workspacePreference: { preferredProvider: 'other', preferredModel: 'pricey' } });
+    assert.equal(exact.recommendedVendor, 'other');
+    assert.deepEqual(exact.workspacePreference, { status: 'applied', vendor: 'other', modelId: 'pricey' });
+    const mismatch = getModelRecommendations(emptyScorecard(), { ...options, workspacePreference: { preferredProvider: 'other', preferredModel: 'cheap' } });
+    assert.equal(mismatch.recommendedModelId, 'cheap');
+    assert.equal(mismatch.recommendedVendor, 'copilot');
+    assert.deepEqual(mismatch.workspacePreference, { status: 'no-eligible-match', vendor: 'other', modelId: 'cheap' });
+});
+
+test('a missing or unpriced workspace preference falls back to existing behavior explicitly', () => {
+    const models = [
+        { id: 'cheap', vendor: 'copilot', inputCost: 1, outputCost: 2 },
+        { id: 'unpriced', vendor: 'other' }
+    ];
+    const missingProvider = getModelRecommendations(emptyScorecard(), {
+        role: 'coding', taskCategory: 'simple', models, getPricing,
+        workspacePreference: { preferredProvider: 'missing', preferredModel: '' }
+    });
+    assert.equal(missingProvider.recommendedModelId, 'cheap');
+    assert.deepEqual(missingProvider.workspacePreference, { status: 'no-eligible-match', vendor: 'missing', modelId: null });
+    const unpriced = getModelRecommendations(emptyScorecard(), {
+        role: 'coding', taskCategory: 'simple', models, getPricing,
+        workspacePreference: { preferredProvider: 'other', preferredModel: 'unpriced' }
+    });
+    assert.equal(unpriced.recommendedModelId, 'cheap');
+    assert.deepEqual(unpriced.workspacePreference, { status: 'no-eligible-match', vendor: 'other', modelId: 'unpriced' });
+});
+
+test('manual selections outrank a workspace preference and report it as not selected', () => {
+    const models = [
+        { id: 'cheap', vendor: 'copilot', inputCost: 1, outputCost: 2 },
+        { id: 'preferred', vendor: 'other', inputCost: 10, outputCost: 50 }
+    ];
+    const result = getModelRecommendations(emptyScorecard(), {
+        activity: 'implement', domain: 'coding', difficulty: 'simple', models, getPricing,
+        manualSelection: { modelId: 'cheap', vendor: 'copilot' },
+        workspacePreference: { preferredProvider: 'other', preferredModel: '' }
+    });
+    assert.equal(result.recommendedModelId, 'cheap');
+    assert.equal(result.selectionMode, 'manual');
+    assert.deepEqual(result.workspacePreference, { status: 'not-selected', vendor: 'other', modelId: null });
+});
+
+test('workspace preference never bypasses the complex-task evidence rule', () => {
+    const models = [
+        { id: 'learned', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'preferred', vendor: 'other', inputCost: 1, outputCost: 2 }
+    ];
+    let scorecard = emptyScorecard();
+    for (let index = 0; index < 2; index += 1) {
+        scorecard = recordOutcome(scorecard, { role: 'coding', taskCategory: 'complex', modelId: 'learned', outcome: 'success', evidenceCode: 'acceptance_passed' });
+    }
+    const options = { role: 'coding', taskCategory: 'complex', models, getPricing, workspacePreference: { preferredProvider: 'other', preferredModel: '' } };
+    const unlearned = getModelRecommendations(scorecard, options);
+    assert.equal(unlearned.recommendedModelId, 'learned');
+    assert.deepEqual(unlearned.workspacePreference, { status: 'not-selected', vendor: 'other', modelId: null });
+    for (let index = 0; index < 2; index += 1) {
+        scorecard = recordOutcome(scorecard, { role: 'coding', taskCategory: 'complex', modelId: 'preferred', outcome: 'success', evidenceCode: 'acceptance_passed' });
+    }
+    const learned = getModelRecommendations(scorecard, options);
+    assert.equal(learned.recommendedModelId, 'preferred');
+    assert.equal(learned.workspacePreference.status, 'applied');
 });
 
 test('model scope and individual classification control eligibility and pricing', () => {

@@ -8,6 +8,7 @@
     "main": "./src/extension.js",
     "activationEvents": [
         "onCommand:agentRoster.openModelLearning",
+        "onCommand:agentRoster.openModelInventory",
         "onView:agentRoster.modelLearning",
         "onLanguageModelTool:aroGetModelRecommendations",
         "onLanguageModelTool:aroRecordModelOutcome"
@@ -51,6 +52,26 @@
                     },
                     "default": [],
                     "description": "Exact VS Code vendor IDs for local model providers to include in Aro recommendations. Models from these vendors are treated as having zero token charges; hardware and energy costs are not estimated. Only add providers that run locally. Copilot models are always included."
+                },
+                "agentRoster.modelRecommendation.preferredProvider": {
+                    "type": "string",
+                    "scope": "window",
+                    "default": "",
+                    "description": "Exact VS Code vendor ID that Aro should prefer among eligible models in this workspace. Ignored when no eligible model from this provider exists; the existing recommendation applies. Leave empty for no preference."
+                },
+                "agentRoster.modelRecommendation.preferredModel": {
+                    "type": "string",
+                    "scope": "window",
+                    "default": "",
+                    "description": "Exact model ID to prefer within agentRoster.modelRecommendation.preferredProvider. Requires a provider and is ignored when that model is not currently eligible. Manual model selections still take precedence."
+                },
+                "agentRoster.modelRecommendation.enabledProviders": {
+                    "type": "array",
+                    "scope": "window",
+                    "items": {
+                        "type": "string"
+                    },
+                    "markdownDescription": "Exact VS Code vendor IDs Aro may use in this workspace. When set, this list overrides the global provider availability and can re-enable a provider disabled globally. When unset, the global list applies. Manage it from **Agent Roster: Open Model Inventory** (Workspace tab)."
                 }
             }
         },
@@ -87,6 +108,10 @@
             {
                 "command": "agentRoster.changeModelPriority",
                 "title": "Agent Roster: Change Model Priority"
+            },
+            {
+                "command": "agentRoster.openModelInventory",
+                "title": "Agent Roster: Open Model Inventory"
             }
         ],
         "languageModelTools": [
