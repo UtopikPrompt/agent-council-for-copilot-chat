@@ -5,7 +5,6 @@
         coding: 'Coding', business: 'Business', 'documentation-governance': 'Documentation and governance',
         infrastructure: 'Infrastructure', 'cross-domain': 'Cross-domain'
     };
-    let activeView = 'recommendations';
     let models = [];
     let dashboard = [];
     let activeActivity = 'all';
@@ -13,42 +12,12 @@
     let scope = 'both';
     let priority = 'cloud-first';
     let hasSelectedLocalModel = false;
-    let providerTypes = {};
-    let lockedProviders = [];
     let pinnedAdvisorModel = null;
+    let workspacePreference = normalizeWorkspacePreference(null);
+    let preferenceScope = 'profile';
+    let learningLoading = false;
 
     const byId = id => document.getElementById(id);
-
-    function selectView(view, focus = false) {
-        const tabs = Array.from(byId('view-tabs').children);
-        activeView = view;
-        for (const tab of tabs) {
-            const selected = tab.dataset.view === view;
-            const panel = byId(`${tab.dataset.view}-view`);
-            tab.tabIndex = selected ? 0 : -1;
-            tab.setAttribute('aria-selected', String(selected));
-            panel.hidden = !selected;
-            panel.setAttribute('aria-labelledby', tab.id);
-        }
-        if (focus) tabs.find(tab => tab.dataset.view === view)?.focus();
-    }
-
-    function initializeViewTabs() {
-        const tabs = Array.from(byId('view-tabs').children);
-        for (const [index, tab] of tabs.entries()) {
-            tab.addEventListener('click', () => selectView(tab.dataset.view, true));
-            tab.addEventListener('keydown', event => {
-                const nextIndex = event.key === 'ArrowRight' ? (index + 1) % tabs.length
-                    : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
-                        : event.key === 'Home' ? 0
-                            : event.key === 'End' ? tabs.length - 1 : -1;
-                if (nextIndex < 0) return;
-                event.preventDefault();
-                selectView(tabs[nextIndex].dataset.view, true);
-            });
-        }
-        selectView(activeView);
-    }
 
     function renderFilterTabs(containerId, prefix, selected, labels, onSelect) {
         const container = byId(containerId);
@@ -100,139 +69,6 @@
         if (focus) Array.from(byId('domain-tabs').children).find(tab => tab.dataset.filterValue === domain)?.focus();
         renderDashboard();
     }
-
-    function renderModels() {
-        const body = byId('models');
-        body.replaceChildren();
-        const query = byId('model-search').value.trim().toLowerCase();
-        const visibleModels = models.filter(model => [model.name, model.id, model.vendor, model.family]
-            .some(value => String(value || '').toLowerCase().includes(query)));
-        for (const model of visibleModels) {
-            const row = document.createElement('tr');
-            const selection = document.createElement('td');
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = model.selected;
-            checkbox.setAttribute('aria-label', `Use ${model.name} (${model.vendor})`);
-            checkbox.addEventListener('change', () => {
-                setStatus('Saving model selection...', 'is-loading');
-                vscode.postMessage({ type: 'setModelSelected', id: model.id, vendor: model.vendor, selected: checkbox.checked });
-            });
-            selection.append(checkbox);
-            const name = document.createElement('td');
-            name.textContent = model.name;
-            const id = document.createElement('small');
-            id.textContent = model.id;
-            name.append(id);
-            const provider = document.createElement('td');
-            provider.textContent = `${model.vendor} / ${model.family} (${model.version})`;
-            const tier = document.createElement('td');
-            if (model.kind === 'local') {
-                const select = document.createElement('select');
-                select.setAttribute('aria-label', `Capability tier for ${model.name} (${model.vendor})`);
-                for (const [value, label] of [['unrated', 'Unrated'], ['simple', 'Low (simple)'], ['standard', 'Medium (standard)'], ['complex', 'High (complex)']]) {
-                    const option = document.createElement('option');
-                    option.value = value;
-                    option.textContent = label;
-                    select.append(option);
-                }
-                select.value = model.localTier;
-                select.addEventListener('change', () => {
-                    setStatus('Saving local model tier...', 'is-loading');
-                    vscode.postMessage({ type: 'setLocalTier', id: model.id, vendor: model.vendor, tier: select.value });
-                });
-                tier.append(select);
-            } else if (['unpriced', 'manual'].includes(model.pricing?.source)) {
-                const priceSelect = document.createElement('select');
-                priceSelect.setAttribute('aria-label', `Price tier for ${model.name} (${model.vendor})`);
-                for (const [value, label] of [['unpriced', 'Unpriced'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]) {
-                    const option = document.createElement('option');
-                    option.value = value;
-                    option.textContent = label;
-                    priceSelect.append(option);
-                }
-                priceSelect.value = model.pricing.budgetClass;
-                priceSelect.addEventListener('change', () => {
-                    setStatus('Saving manual price tier...', 'is-loading');
-                    vscode.postMessage({ type: 'setManualPriceTier', id: model.id, vendor: model.vendor, tier: priceSelect.value });
-                });
-                tier.append(priceSelect);
-            } else {
-                tier.textContent = model.pricing?.budgetClass || 'unpriced';
-            }
-            const price = document.createElement('td');
-            const rates = [
-                `In ${model.pricing?.inputCost ?? '-'}`,
-                `Out ${model.pricing?.outputCost ?? '-'}`,
-                `Cache ${model.pricing?.cacheCost ?? '-'}`,
-                `Write ${model.pricing?.cacheWriteCost ?? '-'}`
-            ];
-            price.textContent = rates.join(' / ');
-            const source = document.createElement('td');
-            source.textContent = model.pricing?.source === 'vscode'
-                ? 'Native'
-                : model.pricing?.source === 'snapshot'
-                    ? `Snapshot ${model.pricing.snapshotDate}`
-                    : model.pricing?.source === 'local'
-                        ? 'Local (no token charge)'
-                    : model.pricing?.source === 'manual'
-                        ? 'Manual tier'
-                    : 'Unavailable';
-            row.append(selection, name, provider, tier, price, source);
-            body.append(row);
-        }
-        const modelCount = query ? `${visibleModels.length} / ${models.length} models` : `${models.length} models`;
-        byId('model-count').textContent = modelCount;
-        byId('model-count-label').textContent = modelCount;
-    }
-
-    function renderProviders() {
-        const body = byId('providers');
-        body.replaceChildren();
-        for (const vendor of [...new Set(models.map(model => model.vendor))].sort()) {
-            const providerModels = models.filter(model => model.vendor === vendor);
-            const allSelected = providerModels.every(model => model.selected);
-            const selectedCount = providerModels.filter(model => model.selected).length;
-            const row = document.createElement('tr');
-            const provider = document.createElement('td');
-            provider.textContent = vendor;
-            const selection = document.createElement('td');
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'provider-filter';
-            button.textContent = `${selectedCount} / ${providerModels.length} selected`;
-            button.setAttribute('aria-pressed', allSelected ? 'true' : selectedCount ? 'mixed' : 'false');
-            button.setAttribute('aria-label', `${allSelected ? 'Deselect' : 'Select'} all models from ${vendor}`);
-            button.addEventListener('click', () => {
-                setStatus('Saving provider selection...', 'is-loading');
-                vscode.postMessage({ type: 'setProviderSelected', vendor, selected: !allSelected });
-            });
-            selection.append(button);
-            const typeCell = document.createElement('td');
-            if (lockedProviders.includes(vendor)) {
-                typeCell.textContent = 'Cloud';
-            } else {
-                const type = document.createElement('select');
-                type.setAttribute('aria-label', `Model type for ${vendor}`);
-                for (const [value, label] of [['unknown', 'Unknown'], ['cloud', 'Cloud'], ['local', 'Local']]) {
-                    const option = document.createElement('option');
-                    option.value = value;
-                    option.textContent = label;
-                    type.append(option);
-                }
-                type.value = providerTypes[vendor] || 'unknown';
-                type.addEventListener('change', () => {
-                    setStatus('Saving provider type...', 'is-loading');
-                    vscode.postMessage({ type: 'setProviderType', vendor, kind: type.value });
-                });
-                typeCell.append(type);
-            }
-            row.append(provider, selection, typeCell);
-            body.append(row);
-        }
-    }
-
-    
 
     function renderDashboard() {
         const body = byId('recommendations');
@@ -364,19 +200,111 @@
         select.value = pinnedAdvisorModel ? advisorOptionValue(pinnedAdvisorModel) : '';
     }
 
+    function normalizeWorkspacePreference(value) {
+        const providers = Array.isArray(value?.providers)
+            ? value.providers.filter(provider => typeof provider?.vendor === 'string' && Array.isArray(provider.models))
+            : [];
+        return {
+            hasWorkspace: value?.hasWorkspace === true,
+            active: value?.active === true,
+            invalid: value?.invalid === true,
+            preferredProvider: typeof value?.preferredProvider === 'string' ? value.preferredProvider : '',
+            preferredModel: typeof value?.preferredModel === 'string' ? value.preferredModel : '',
+            providerAvailable: value?.providerAvailable !== false,
+            modelAvailable: value?.modelAvailable !== false,
+            providers
+        };
+    }
+
+    function createOption(value, label) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        return option;
+    }
+
+    function syncPreferenceScope() {
+        if (workspacePreference.active) preferenceScope = 'workspace';
+    }
+
+    function describeWorkspacePreference() {
+        const state = workspacePreference;
+        if (!state.hasWorkspace) return 'Open a folder to set a workspace preference. Profile recommendations apply; user settings are not changed.';
+        if (!state.active && !state.providers.length) return 'No eligible discovered model is available for a workspace preference in this scope. Select models in the inventory first.';
+        if (preferenceScope === 'workspace' && !state.active) return 'Choose a provider to save a workspace preference. Until then, profile recommendations apply.';
+        if (!state.active) return 'Profile: no workspace preference. Learned and manual profile recommendations apply.';
+        if (state.invalid) return 'The saved workspace setting names a model without a provider, so Aro ignores it. Reset to profile to clear it.';
+        if (!state.providerAvailable) return `Workspace preference: ${state.preferredProvider} has no eligible model in this scope, so Aro ignores it until one is eligible.`;
+        if (!state.modelAvailable) return `Workspace preference: ${state.preferredModel} is not eligible in this scope, so Aro ignores it.`;
+        const provider = state.providers.find(item => item.vendor === state.preferredProvider);
+        const model = provider?.models.find(item => item.id === state.preferredModel);
+        const target = state.preferredModel ? `${state.preferredProvider} / ${model?.name || state.preferredModel}` : `${state.preferredProvider} (any eligible model)`;
+        return `Workspace preference: ${target}. Aro prefers it among eligible models; manual selections still take precedence.`;
+    }
+
+    function renderWorkspacePreference() {
+        const state = workspacePreference;
+        byId('preference-scope-profile').checked = preferenceScope === 'profile';
+        byId('preference-scope-workspace').checked = preferenceScope === 'workspace';
+        byId('workspace-preference-fields').hidden = preferenceScope !== 'workspace';
+        const providerSelect = byId('workspace-provider');
+        providerSelect.replaceChildren();
+        if (!state.preferredProvider) providerSelect.append(createOption('', 'Choose provider'));
+        for (const provider of state.providers) providerSelect.append(createOption(provider.vendor, provider.vendor));
+        if (state.preferredProvider && !state.providerAvailable) providerSelect.append(createOption(state.preferredProvider, `Unavailable: ${state.preferredProvider}`));
+        providerSelect.value = state.preferredProvider;
+        const selectedProvider = providerSelect.value;
+        const provider = state.providers.find(item => item.vendor === selectedProvider);
+        const matchesSaved = selectedProvider === state.preferredProvider;
+        const modelSelect = byId('workspace-model');
+        modelSelect.replaceChildren(createOption('', 'Any eligible model'));
+        for (const model of provider?.models || []) modelSelect.append(createOption(model.id, model.name));
+        if (matchesSaved && state.preferredModel && !state.modelAvailable) modelSelect.append(createOption(state.preferredModel, `Unavailable: ${state.preferredModel}`));
+        modelSelect.value = matchesSaved ? state.preferredModel : '';
+        byId('workspace-preference-status').textContent = describeWorkspacePreference();
+        updateWorkspacePreferenceControls();
+    }
+
+    function updateWorkspacePreferenceControls() {
+        const state = workspacePreference;
+        const locked = learningLoading || !state.hasWorkspace;
+        byId('preference-scope-profile').disabled = locked;
+        byId('preference-scope-workspace').disabled = locked;
+        byId('workspace-provider').disabled = locked || !state.providers.length;
+        byId('workspace-model').disabled = locked || !byId('workspace-provider').value;
+        byId('clear-workspace-preference').disabled = locked || !state.active;
+    }
+
+    function saveWorkspacePreference(preferredProvider, preferredModel) {
+        preferenceScope = 'workspace';
+        setStatus('Saving workspace model preference...', 'is-loading');
+        vscode.postMessage({ type: 'setWorkspacePreference', scope: 'workspace', preferredProvider, preferredModel });
+    }
+
+    function resetWorkspacePreference() {
+        preferenceScope = 'profile';
+        if (!workspacePreference.active) {
+            renderWorkspacePreference();
+            return;
+        }
+        setStatus('Restoring profile recommendations...', 'is-loading');
+        vscode.postMessage({ type: 'setWorkspacePreference', scope: 'profile' });
+    }
+
     function setStatus(message, state) {
+        learningLoading = state === 'is-loading';
         const status = byId('learning-status');
         status.className = `model-load-status ${state}`;
         status.setAttribute('aria-busy', String(state === 'is-loading'));
         byId('learning-message').textContent = message;
         byId('refresh-learning').disabled = state === 'is-loading';
         byId('advisor-default-model').disabled = state === 'is-loading';
-        byId('model-search').disabled = state === 'is-loading';
         byId('model-priority').disabled = state === 'is-loading' || scope !== 'both' || !hasSelectedLocalModel;
-        for (const control of document.querySelectorAll('#model-scope input, #models select, #models input, #provider-controls button, #provider-types select')) {
+        for (const control of document.querySelectorAll('#model-scope input')) {
             control.disabled = state === 'is-loading'
                 || (control.name === 'model-scope' && control.value !== 'cloud' && !hasSelectedLocalModel);
         }
+        updateWorkspacePreferenceControls();
     }
 
     function refresh() {
@@ -391,8 +319,7 @@
         setStatus('Saving Aro and advisor default model...', 'is-loading');
         vscode.postMessage({ type: 'setAdvisorPinnedModel', model: value ? { modelId, vendor } : null });
     });
-    byId('model-search').addEventListener('input', renderModels);
-    initializeViewTabs();
+    byId('open-model-inventory').addEventListener('click', () => vscode.postMessage({ type: 'openModelInventory' }));
     renderActivityTabs();
     renderDomainTabs();
     byId('model-scope').addEventListener('change', event => {
@@ -405,6 +332,19 @@
         setStatus('Saving model priority...', 'is-loading');
         vscode.postMessage({ type: 'setModelPriority', priority: event.target.value });
     });
+    byId('preference-scope-profile').addEventListener('change', resetWorkspacePreference);
+    byId('clear-workspace-preference').addEventListener('click', resetWorkspacePreference);
+    byId('preference-scope-workspace').addEventListener('change', () => {
+        preferenceScope = 'workspace';
+        renderWorkspacePreference();
+    });
+    byId('workspace-provider').addEventListener('change', () => {
+        const vendor = byId('workspace-provider').value;
+        if (vendor) saveWorkspacePreference(vendor, '');
+    });
+    byId('workspace-model').addEventListener('change', () => {
+        saveWorkspacePreference(byId('workspace-provider').value, byId('workspace-model').value);
+    });
 
     window.addEventListener('message', event => {
         const message = event.data;
@@ -414,14 +354,13 @@
             scope = message.scope;
             priority = message.priority;
             hasSelectedLocalModel = message.hasSelectedLocalModel;
-            providerTypes = message.providerTypes;
-            lockedProviders = message.lockedProviders;
             pinnedAdvisorModel = message.pinnedAdvisorModel ?? null;
+            workspacePreference = normalizeWorkspacePreference(message.workspacePreference);
+            syncPreferenceScope();
             for (const control of document.querySelectorAll('#model-scope input')) control.checked = control.value === scope;
             byId('model-priority').value = priority;
-            renderModels();
-            renderProviders();
             renderAdvisorDefault();
+            renderWorkspacePreference();
             renderDashboard();
             setStatus(scope === 'local' && !hasSelectedLocalModel
                 ? `Local only: no selected local model available. ${message.recordCount} outcomes stored.`
@@ -429,9 +368,10 @@
         } else if (message.type === 'learningDashboardError') {
             for (const control of document.querySelectorAll('#model-scope input')) control.checked = control.value === scope;
             byId('model-priority').value = priority;
-            renderModels();
-            renderProviders();
             renderAdvisorDefault();
+            workspacePreference = normalizeWorkspacePreference(message.workspacePreference ?? workspacePreference);
+            syncPreferenceScope();
+            renderWorkspacePreference();
             setStatus(`Could not load learning data: ${message.error}`, 'is-error');
         } else if (message.type === 'learningDashboardLoading') {
             setStatus('Loading model rates and Aro outcome history...', 'is-loading');
@@ -439,5 +379,6 @@
     });
 
     setStatus('Loading model rates and Aro outcome history...', 'is-loading');
+    renderWorkspacePreference();
     vscode.postMessage({ type: 'ready' });
 })();

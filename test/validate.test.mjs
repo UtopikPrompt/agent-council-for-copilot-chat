@@ -212,30 +212,46 @@ test('Aro model learning is automatic, persistent, and has no manual benchmark U
     assert.match(extension, /vscode\.lm\.registerTool\('aroRecordModelOutcome'/);
     assert.match(extension, /context\.globalState\.update\(LEARNING_STORAGE_KEY/);
     assert.match(extension, /getContextualLearningDashboard/);
-    assert.equal((extension.match(/img-src \$\{webview\.cspSource\}/g) || []).length, 1);
+    // Dashboard and provider availability pages each declare the same restrictive CSP.
+    assert.equal((extension.match(/img-src \$\{webview\.cspSource\}/g) || []).length, 2);
     assert.doesNotMatch(extension, /message\.type === 'benchmark'/);
     assert.doesNotMatch(extension, /model\.sendRequest/);
     assert.match(extension, /getManagedPricing\(model, policy\.localModelVendors, policy\.classifications, policy\.providerTypes, policy\.manualPriceTiers\)/);
     assert.match(extension, /selectModels\(availableModels, policy\.localModelVendors, policy\.classifications, scope/);
     assert.match(extension, /getModelsForTask: difficulty => selectModels\(summaries/);
     assert.deepEqual(manifest.contributes.configuration.properties['agentRoster.modelLearning.localModelVendors'].default, []);
+    for (const key of ['preferredProvider', 'preferredModel']) {
+        const setting = manifest.contributes.configuration.properties[`agentRoster.modelRecommendation.${key}`];
+        assert.equal(setting.type, 'string');
+        assert.equal(setting.scope, 'window');
+        assert.equal(setting.default, '');
+    }
+    assert.match(extension, /function getWorkspacePreference\(\)/);
+    assert.equal(extension.match(/workspacePreference: getWorkspacePreference\(\)/g).length, 4);
+    assert.match(extension, /affectsConfiguration\('agentRoster\.modelRecommendation'\)/);
+    const modelRecommendationReadme = await readFile(path.join(root, 'README.md'), 'utf8');
+    assert.match(modelRecommendationReadme, /agentRoster\.modelRecommendation\.preferredProvider/);
+    assert.match(modelRecommendationReadme, /agentRoster\.modelRecommendation\.preferredModel/);
     const handlerRegistration = extension.indexOf('panel.webview.onDidReceiveMessage(message =>', extension.indexOf('function openModelLearning'));
     const htmlAssignment = extension.indexOf('panel.webview.html = getLearningHtml', extension.indexOf('function openModelLearning'));
     assert.ok(handlerRegistration >= 0 && handlerRegistration < htmlAssignment);
     assert.match(extension, /selectChatModelsWithTimeout/);
     assert.match(extension, /MODEL_DISCOVERY_TIMEOUT_MS = 15_000/);
-    assert.match(extension, /id="model-count"/);
     assert.match(extension, /id="activity-tabs" class="activity-tabs" role="tablist"/);
     assert.match(extension, /id="domain-tabs" class="activity-tabs" role="tablist"/);
-    assert.match(extension, /id="view-tabs" role="tablist"/);
-    assert.match(extension, /id="inventory-view" class="view-panel"/);
+    assert.doesNotMatch(extension, /id="view-tabs"|id="inventory-view"|id="model-count"/);
+    assert.match(extension, /id="model-catalog"/);
     assert.ok(extension.indexOf('id="domain-filter-label"') < extension.indexOf('id="activity-filter-label"'));
+    const recommendationHeading = extension.indexOf('<div class="recommendations-heading"><h2>Learned recommendations</h2>');
+    const advisorDefaultLabel = extension.indexOf('<label for="advisor-default-model">Aro &amp; advisors default</label>');
+    const recommendationActions = extension.indexOf('<div class="recommendations-actions">');
+    assert.ok(recommendationHeading >= 0 && advisorDefaultLabel > recommendationHeading && recommendationActions > advisorDefaultLabel);
+    assert.match(extension, /class="recommendations-actions"><button id="open-model-inventory" type="button">Model Inventory<\/button><button id="refresh-learning" type="button">Refresh<\/button>/);
     assert.match(extension, /<th>Provider<\/th><th>Model selection<\/th><th>Type<\/th><\/tr><\/thead><tbody id="providers">/);
     assert.doesNotMatch(extension, /provider-settings|provider-types|provider-controls/);
     const recommendationsViewIndex = extension.indexOf('id="recommendations-view"');
-    const inventoryViewIndex = extension.indexOf('id="inventory-view"');
     const modelScopeIndex = extension.indexOf('id="model-scope"');
-    assert.ok(modelScopeIndex > recommendationsViewIndex && modelScopeIndex < inventoryViewIndex);
+    assert.ok(modelScopeIndex > recommendationsViewIndex);
     assert.doesNotMatch(extension, /id="context-difficulty"/);
     assert.match(extension, /id="context-count"/);
     assert.doesNotMatch(extension, /class="advisor-model"/);
@@ -248,6 +264,7 @@ test('Aro model learning is automatic, persistent, and has no manual benchmark U
     assert.doesNotMatch(dashboard, /sendRequest|benchmark|textarea|scorecard.*set/i);
     const dashboardStyles = await readFile(path.join(root, 'media/model-learning-dashboard.css'), 'utf8');
     assert.match(dashboardStyles, /\.context-controls\s*\{[^}]*flex-direction:\s*column/);
+    assert.match(dashboardStyles, /\.recommendations-heading\s*\{[^}]*flex-direction:\s*column/);
 });
 
 test('maintenance and privacy documentation describe the learning runtime', async () => {
@@ -330,7 +347,7 @@ test('sidebar quick controls and status follow saved model policy and outcomes',
             registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
             selectChatModels: async () => { if (failDiscovery) throw new Error('provider unavailable'); return models; }
         },
-        workspace: { getConfiguration: () => ({ get: () => [] }), onDidChangeConfiguration: () => ({ dispose() {} }) },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() {} }) },
         commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
         window: {
             registerTreeDataProvider: (name, provider) => { sidebar = provider; return { dispose() {} }; },
@@ -425,7 +442,7 @@ test('sidebar scope changes refresh a dashboard already loading', { timeout: 300
                 return models;
             }
         },
-        workspace: { getConfiguration: () => ({ get: () => [] }), onDidChangeConfiguration: () => ({ dispose() {} }) },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() {} }) },
         commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
         window: {
             registerTreeDataProvider: () => ({ dispose() {} }), createWebviewPanel: () => panel,
@@ -473,6 +490,8 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
         { id: 'local', name: 'Local', vendor: 'ollama' }
     ];
     let panel;
+    let inventoryPanel;
+    let catalog = null;
     let quickPickChoices = [];
     const vscode = {
         EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
@@ -483,7 +502,7 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
             registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
             selectChatModels: async () => models
         },
-        workspace: { getConfiguration: () => ({ get: () => [] }), onDidChangeConfiguration: () => ({ dispose() {} }) },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() {} }) },
         commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
         window: {
             registerTreeDataProvider: () => ({ dispose() {} }),
@@ -491,17 +510,24 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
                 quickPickChoices = choices;
                 return choices.find(choice => choice.modelId === 'cloud');
             },
-            createWebviewPanel: () => {
-                panel = {
+            createWebviewPanel: (viewType, title) => {
+                const created = {
+                    posted: [],
                     webview: {
                         cspSource: 'test',
                         asWebviewUri: uri => uri,
-                        onDidReceiveMessage: handler => { panel.receive = handler; },
-                        postMessage: message => { if (['learningDashboard', 'learningDashboardError'].includes(message.type)) panel.resolve(message); }
+                        onDidReceiveMessage: handler => { created.receive = handler; },
+                        postMessage: message => {
+                            created.posted.push(message);
+                            if (['learningDashboard', 'learningDashboardError'].includes(message.type)) created.resolve?.(message);
+                        }
                     },
+                    reveal() {},
                     onDidDispose() {}
                 };
-                return panel;
+                if (title === 'Aro Model Inventory') inventoryPanel = created;
+                else panel = created;
+                return created;
             }
         },
         Uri: { joinPath: (...parts) => parts.join('/') },
@@ -524,17 +550,30 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     module.exports.activate(context);
     commands.get('agentRoster.openModelLearning')();
     const nextDashboard = () => new Promise(resolve => { panel.resolve = resolve; });
+    const settle = async () => { for (let index = 0; index < 20; index += 1) await new Promise(resolve => setImmediate(resolve)); };
+    const catalogChange = async message => {
+        const response = nextDashboard();
+        inventoryPanel.receive(message);
+        const update = await response;
+        await settle();
+        catalog = inventoryPanel.posted.filter(entry => entry.type === 'providerAvailability').at(-1);
+        return update;
+    };
     let response = nextDashboard();
     panel.receive({ type: 'ready' });
     let dashboard = await response;
+    commands.get('agentRoster.openModelInventory')();
+    inventoryPanel.receive({ type: 'ready' });
+    await settle();
+    catalog = inventoryPanel.posted.filter(entry => entry.type === 'providerAvailability').at(-1);
     assert.equal(dashboard.scope, 'cloud');
     assert.equal(dashboard.hasSelectedLocalModel, false);
     assert.equal(dashboard.priority, 'local-first');
-    assert.equal(dashboard.models.find(model => model.id === 'local').kind, 'unknown');
-    assert.equal(dashboard.models.find(model => model.id === 'cli').kind, 'cloud');
-    assert.equal(dashboard.providerTypes.copilotcli, 'cloud');
-    assert.ok(dashboard.lockedProviders.includes('copilot'));
-    assert.ok(dashboard.lockedProviders.includes('copilotcli'));
+    assert.equal(catalog.catalog.find(model => model.id === 'local').kind, 'unknown');
+    assert.equal(catalog.catalog.find(model => model.id === 'cli').kind, 'cloud');
+    assert.equal(catalog.providerTypes.copilotcli, 'cloud');
+    assert.ok(catalog.lockedProviders.includes('copilot'));
+    assert.ok(catalog.lockedProviders.includes('copilotcli'));
     const migratedPin = dashboard.dashboard.find(row => row.activity === 'operate'
         && row.domain === 'documentation-governance' && row.difficulty === 'standard');
     assert.equal(migratedPin.manualSelection.modelId, 'cloud');
@@ -543,10 +582,10 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     } });
     assert.equal(JSON.parse(migratedPinResult.content[0].value).selectionMode, 'manual');
     for (const vendor of ['copilot', 'copilotcli']) {
-        response = nextDashboard();
-        panel.receive({ type: 'setProviderType', vendor, kind: 'local' });
-        const rejected = await response;
-        assert.equal(rejected.type, 'learningDashboardError');
+        inventoryPanel.posted.length = 0;
+        inventoryPanel.receive({ type: 'setProviderType', vendor, kind: 'local' });
+        await settle();
+        const rejected = inventoryPanel.posted.find(message => message.type === 'providerAvailabilityError');
         assert.match(rejected.error, /always cloud/);
     }
     const initialResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
@@ -557,14 +596,10 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.equal(unavailableScope.type, 'learningDashboardError');
     assert.match(unavailableScope.error, /Select a local model/);
     assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'local-first');
-    response = nextDashboard();
-    panel.receive({ type: 'setProviderType', vendor: 'ollama', kind: 'local' });
-    dashboard = await response;
-    assert.equal(dashboard.models.find(model => model.id === 'local').kind, 'local');
-    response = nextDashboard();
-    panel.receive({ type: 'setModelSelected', id: 'local', vendor: 'ollama', selected: true });
-    dashboard = await response;
-    assert.equal(dashboard.models.find(model => model.id === 'local').selected, true);
+    dashboard = await catalogChange({ type: 'setProviderType', vendor: 'ollama', kind: 'local' });
+    assert.equal(catalog.catalog.find(model => model.id === 'local').kind, 'local');
+    dashboard = await catalogChange({ type: 'setModelSelected', id: 'local', vendor: 'ollama', selected: true });
+    assert.equal(catalog.catalog.find(model => model.id === 'local').selected, true);
     assert.equal(dashboard.hasSelectedLocalModel, true);
     response = nextDashboard();
     panel.receive({ type: 'setModelScope', scope: 'both' });
@@ -589,10 +624,8 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.equal(state.get('agentRoster.modelLearning.manualSelections.v1').some(selection => selection.activity === 'implement'
         && selection.domain === 'coding' && selection.difficulty === 'simple'), false);
     assert.notEqual(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').selectionMode, 'manual');
-    response = nextDashboard();
-    panel.receive({ type: 'setLocalTier', id: 'local', vendor: 'ollama', tier: 'standard' });
-    dashboard = await response;
-    assert.equal(dashboard.models.find(model => model.id === 'local').localTier, 'standard');
+    dashboard = await catalogChange({ type: 'setLocalTier', id: 'local', vendor: 'ollama', tier: 'standard' });
+    assert.equal(catalog.catalog.find(model => model.id === 'local').localTier, 'standard');
     response = nextDashboard();
     panel.receive({ type: 'setModelScope', scope: 'local' });
     dashboard = await response;
@@ -663,19 +696,16 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     response = nextDashboard();
     panel.receive({ type: 'setModelScope', scope: 'local' });
     await response;
-    response = nextDashboard();
-    panel.receive({ type: 'setProviderSelected', vendor: 'ollama', selected: false });
-    dashboard = await response;
-    assert.equal(dashboard.models.find(model => model.id === 'local').selected, false);
+    dashboard = await catalogChange({ type: 'setProviderSelected', vendor: 'ollama', selected: false });
+    assert.equal(catalog.catalog.find(model => model.id === 'local').selected, false);
     assert.equal(dashboard.scope, 'cloud');
     assert.equal(dashboard.hasSelectedLocalModel, false);
     assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'cloud');
     const afterRemoval = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
     assert.equal(JSON.parse(afterRemoval.content[0].value).modelScope, 'cloud');
     assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'cloud');
-    response = nextDashboard();
-    panel.receive({ type: 'setProviderSelected', vendor: 'ollama', selected: true });
-    await response;
+    dashboard = await catalogChange({ type: 'setProviderSelected', vendor: 'ollama', selected: true });
+    assert.equal(catalog.catalog.find(model => model.id === 'local').selected, true);
     response = nextDashboard();
     panel.receive({ type: 'setModelScope', scope: 'local' });
     await response;
@@ -692,22 +722,16 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     dashboard = await response;
     assert.equal(dashboard.priority, 'cloud-first');
     assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'cloud');
-    response = nextDashboard();
-    panel.receive({ type: 'setManualPriceTier', id: 'unpriced', vendor: 'copilot', tier: 'medium' });
-    dashboard = await response;
+    dashboard = await catalogChange({ type: 'setManualPriceTier', id: 'unpriced', vendor: 'copilot', tier: 'medium' });
     assert.equal(dashboard.models.find(model => model.id === 'unpriced').pricing.source, 'manual');
     response = nextDashboard();
     panel.receive({ type: 'setModelScope', scope: 'cloud' });
     await response;
     const manualResult = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'coding', taskCategory: 'simple' } });
     assert.equal(JSON.parse(manualResult.content[0].value).candidates.find(candidate => candidate.id === 'unpriced').pricing.budgetClass, 'medium');
-    response = nextDashboard();
-    panel.receive({ type: 'setModelSelected', id: 'cloud', vendor: 'copilot', selected: false });
-    dashboard = await response;
+    dashboard = await catalogChange({ type: 'setModelSelected', id: 'cloud', vendor: 'copilot', selected: false });
     assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, 'unpriced');
-    response = nextDashboard();
-    panel.receive({ type: 'setManualPriceTier', id: 'unpriced', vendor: 'copilot', tier: 'unpriced' });
-    dashboard = await response;
+    dashboard = await catalogChange({ type: 'setManualPriceTier', id: 'unpriced', vendor: 'copilot', tier: 'unpriced' });
     assert.equal(dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple').recommendedModelId, null);
     models.push(...Array.from({ length: 60 }, (_, index) => ({
         id: `additional-${index}`, name: `Additional ${index}`, vendor: 'copilot', inputCost: 10, outputCost: 50
@@ -720,9 +744,7 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.ok(compact.candidates.length <= 8);
     assert.ok(compact.candidates.some(candidate => candidate.id === compact.recommendedModelId));
     assert.ok(Buffer.byteLength(compactResult.content[0].value) < 3500);
-    response = nextDashboard();
-    panel.receive({ type: 'setModelSelected', id: 'cli', vendor: 'copilotcli', selected: true });
-    await response;
+    await catalogChange({ type: 'setModelSelected', id: 'cli', vendor: 'copilotcli', selected: true });
     const fallbackResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
         role: 'coding', taskCategory: 'simple', excludedProviders: ['copilot']
     } });
@@ -744,7 +766,197 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.equal(JSON.parse(restored.content[0].value).recommendedModelId, 'local');
 });
 
-test('inventory webview sends scope, selection, tier and provider changes', async () => {
+async function loadWorkspacePreferenceHarness({ workspaceFolders, workspaceValues = {}, updateError }) {
+    const commands = new Map();
+    const state = new Map();
+    const updates = [];
+    const warnings = [];
+    const errors = [];
+    let panel;
+    state.set('agentRoster.modelLearning.inventory.v1', {
+        scope: 'both',
+        providerTypes: { ollama: 'local', copilotcli: 'cloud' },
+        classifications: {},
+        selections: {},
+        localTiers: { '["ollama","local"]': 'simple' }
+    });
+    const models = [
+        { id: 'cloud', name: 'Cloud', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'cli', name: 'CLI', vendor: 'copilotcli', inputCost: 20, outputCost: 100 },
+        { id: 'local', name: 'Local', vendor: 'ollama' }
+    ];
+    // A user-level value must never leak into the workspace-only read.
+    const configuration = {
+        get: () => 'user-level',
+        inspect: key => ({ key, workspaceValue: workspaceValues[key] }),
+        update: async (key, value, target) => {
+            if (updateError) throw new Error(updateError);
+            updates.push({ key, value, target });
+            workspaceValues[key] = value;
+        }
+    };
+    const vscode = {
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        TreeItem: class { constructor(label) { this.label = label; } },
+        TreeItemCollapsibleState: { None: 0 },
+        ThemeIcon: class { constructor(id) { this.id = id; } },
+        ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+        lm: {
+            registerTool: () => ({ dispose() {} }),
+            selectChatModels: async () => models
+        },
+        workspace: {
+            workspaceFolders,
+            getConfiguration: section => section === 'agentRoster.modelRecommendation' ? configuration : { get: (key, fallback) => fallback, inspect: () => undefined },
+            onDidChangeConfiguration: () => ({ dispose() {} })
+        },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        window: {
+            registerTreeDataProvider: () => ({ dispose() {} }),
+            showQuickPick: async () => undefined,
+            showWarningMessage: message => { warnings.push(message); return Promise.resolve(undefined); },
+            showErrorMessage: message => { errors.push(message); },
+            createWebviewPanel: () => {
+                panel = {
+                    webview: {
+                        cspSource: 'test',
+                        asWebviewUri: uri => uri,
+                        onDidReceiveMessage: handler => { panel.receive = handler; },
+                        postMessage: message => { if (['learningDashboard', 'learningDashboardError'].includes(message.type)) panel.resolve(message); }
+                    },
+                    onDidDispose() {}
+                };
+                return panel;
+            }
+        },
+        Uri: { joinPath: (...parts) => parts.join('/') },
+        ViewColumn: { One: 1 },
+        LanguageModelTextPart: class { constructor(value) { this.value = value; } },
+        LanguageModelToolResult: class { constructor(content) { this.content = content; } }
+    };
+    const localRequire = createRequire(path.join(root, 'src/extension.js'));
+    const module = { exports: {} };
+    vm.runInNewContext(await readFile(path.join(root, 'src/extension.js'), 'utf8'), {
+        module, exports: module.exports,
+        require: name => name === 'vscode' ? vscode : localRequire(name), setTimeout, clearTimeout
+    });
+    const context = {
+        subscriptions: [], extensionUri: 'extension',
+        globalState: { get: key => state.get(key), update: async (key, value) => { state.set(key, value); } }
+    };
+    module.exports.activate(context);
+    commands.get('agentRoster.openModelLearning')();
+    const send = async message => {
+        const response = new Promise(resolve => { panel.resolve = resolve; });
+        panel.receive(message);
+        return response;
+    };
+    return { send, updates, warnings, errors, workspaceValues, vscode };
+}
+
+test('workspace preference is read from workspace values only and reported in the dashboard payload', async () => {
+    const harness = await loadWorkspacePreferenceHarness({ workspaceFolders: [{ name: 'repo' }], workspaceValues: { preferredProvider: 'copilot', preferredModel: 'cloud' } });
+    const dashboard = await harness.send({ type: 'ready' });
+    assert.equal(dashboard.type, 'learningDashboard');
+    const preference = dashboard.workspacePreference;
+    assert.equal(preference.hasWorkspace, true);
+    assert.equal(preference.active, true);
+    assert.equal(preference.preferredProvider, 'copilot');
+    assert.equal(preference.preferredModel, 'cloud');
+    assert.equal(preference.providerAvailable, true);
+    assert.equal(preference.modelAvailable, true);
+    assert.ok(preference.providers.find(provider => provider.vendor === 'copilot').models.some(model => model.id === 'cloud'));
+
+    const profile = await loadWorkspacePreferenceHarness({ workspaceFolders: [{ name: 'repo' }] });
+    const unset = (await profile.send({ type: 'ready' })).workspacePreference;
+    assert.equal(unset.active, false);
+    assert.equal(unset.preferredProvider, '');
+    assert.equal(unset.preferredModel, '');
+});
+
+test('workspace selection writes only the two workspace keys and keeps unrelated settings', async () => {
+    const harness = await loadWorkspacePreferenceHarness({ workspaceFolders: [{ name: 'repo' }], workspaceValues: { unrelated: 'kept' } });
+    await harness.send({ type: 'ready' });
+    const exact = await harness.send({ type: 'setWorkspacePreference', scope: 'workspace', preferredProvider: 'copilot', preferredModel: 'cloud' });
+    assert.equal(exact.type, 'learningDashboard');
+    assert.equal(exact.workspacePreference.preferredModel, 'cloud');
+    assert.deepEqual(harness.updates.map(({ key, value, target }) => [key, value, target]), [
+        ['preferredProvider', 'copilot', harness.vscode.ConfigurationTarget.Workspace],
+        ['preferredModel', 'cloud', harness.vscode.ConfigurationTarget.Workspace]
+    ]);
+
+    harness.updates.length = 0;
+    const providerOnly = await harness.send({ type: 'setWorkspacePreference', scope: 'workspace', preferredProvider: 'copilot', preferredModel: '' });
+    assert.equal(providerOnly.workspacePreference.preferredProvider, 'copilot');
+    assert.equal(harness.workspaceValues.preferredModel, undefined);
+    assert.equal(harness.workspaceValues.unrelated, 'kept');
+});
+
+test('profile scope clears only the two workspace preference keys', async () => {
+    const harness = await loadWorkspacePreferenceHarness({
+        workspaceFolders: [{ name: 'repo' }],
+        workspaceValues: { preferredProvider: 'copilot', preferredModel: 'cloud', unrelated: 'kept' }
+    });
+    await harness.send({ type: 'ready' });
+    const result = await harness.send({ type: 'setWorkspacePreference', scope: 'profile' });
+    assert.equal(result.type, 'learningDashboard');
+    assert.equal(result.workspacePreference.active, false);
+    assert.deepEqual(harness.updates.map(({ key, value }) => [key, value]), [['preferredProvider', undefined], ['preferredModel', undefined]]);
+    assert.equal(harness.workspaceValues.unrelated, 'kept');
+});
+
+test('invalid, ineligible, or folderless workspace writes are rejected without changing settings', async () => {
+    const harness = await loadWorkspacePreferenceHarness({ workspaceFolders: [{ name: 'repo' }] });
+    await harness.send({ type: 'ready' });
+    for (const message of [
+        { scope: 'workspace', preferredProvider: 'missing', preferredModel: '' },
+        { scope: 'workspace', preferredProvider: 'copilot', preferredModel: 'gone' },
+        { scope: 'workspace', preferredProvider: 'copilot', preferredModel: 'cli' },
+        { scope: 'workspace', preferredProvider: 42, preferredModel: '' },
+        { scope: 'workspace', preferredProvider: '', preferredModel: 'cloud' },
+        { scope: 'unknown' }
+    ]) {
+        const result = await harness.send({ type: 'setWorkspacePreference', ...message });
+        assert.equal(result.type, 'learningDashboardError', JSON.stringify(message));
+    }
+    assert.deepEqual(harness.updates, []);
+
+    const folderless = await loadWorkspacePreferenceHarness({ workspaceFolders: undefined });
+    await folderless.send({ type: 'ready' });
+    const blocked = await folderless.send({ type: 'setWorkspacePreference', scope: 'profile' });
+    assert.equal(blocked.type, 'learningDashboardError');
+    assert.match(blocked.error, /Open a folder/);
+    assert.deepEqual(folderless.updates, []);
+});
+
+test('workspace write failures are reported to the dashboard', async () => {
+    const harness = await loadWorkspacePreferenceHarness({ workspaceFolders: [{ name: 'repo' }], updateError: 'read-only' });
+    await harness.send({ type: 'ready' });
+    const result = await harness.send({ type: 'setWorkspacePreference', scope: 'workspace', preferredProvider: 'copilot', preferredModel: '' });
+    assert.equal(result.type, 'learningDashboardError');
+    assert.match(result.error, /read-only/);
+});
+
+test('a saved workspace model that is no longer eligible is reported, not removed', async () => {
+    const harness = await loadWorkspacePreferenceHarness({ workspaceFolders: [{ name: 'repo' }], workspaceValues: { preferredProvider: 'copilot', preferredModel: 'gone' } });
+    const preference = (await harness.send({ type: 'ready' })).workspacePreference;
+    assert.equal(preference.providerAvailable, true);
+    assert.equal(preference.modelAvailable, false);
+    assert.equal(harness.workspaceValues.preferredModel, 'gone');
+    assert.deepEqual(harness.updates, []);
+});
+
+test('the Settings-opening configure command is removed from the manifest, sidebar, and documentation', async () => {
+    const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+    assert.equal(manifest.activationEvents.some(event => event.includes('configureWorkspaceModelPreferences')), false);
+    assert.equal(manifest.contributes.commands.some(command => command.command.includes('configureWorkspaceModelPreferences')), false);
+    const extension = await readFile(path.join(root, 'src/extension.js'), 'utf8');
+    assert.doesNotMatch(extension, /configureWorkspaceModelPreferences|Configure workspace model preferences|openWorkspaceSettings/);
+    const readme = await readFile(path.join(root, 'README.md'), 'utf8');
+    assert.doesNotMatch(readme, /configureWorkspaceModelPreferences|Configure workspace model preferences/);
+});
+
+test('learning webview sends scope, priority, and recommendation changes', async () => {
     const elements = new Map();
     const messages = [];
     let receive;
@@ -756,10 +968,9 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
         append(...children) { this.children.push(...children); }
         replaceChildren() { this.children = []; }
     }
-    for (const id of ['models', 'model-search', 'model-count', 'model-count-label', 'recommendations', 'recommendations-panel', 'recommendations-view', 'inventory-view', 'view-tabs', 'learning-status', 'learning-message', 'refresh-learning', 'advisor-default-model', 'model-scope', 'model-priority', 'providers', 'activity-tabs', 'domain-tabs', 'context-count', 'context-activity-heading', 'context-domain-heading', 'context-difficulty-heading']) {
+    for (const id of ['models', 'model-search', 'model-count', 'model-count-label', 'provider-policy-note', 'show-excluded', 'open-model-inventory', 'recommendations', 'recommendations-panel', 'recommendations-view', 'inventory-view', 'view-tabs', 'learning-status', 'learning-message', 'refresh-learning', 'advisor-default-model', 'model-scope', 'model-priority', 'providers', 'activity-tabs', 'domain-tabs', 'context-count', 'context-activity-heading', 'context-domain-heading', 'context-difficulty-heading', 'preference-scope-profile', 'preference-scope-workspace', 'workspace-preference-fields', 'workspace-provider', 'workspace-model', 'clear-workspace-preference', 'workspace-preference-status']) {
         elements.set(id, new Element());
     }
-    elements.get('view-tabs').append(...['recommendations', 'inventory'].map(view => Object.assign(new Element(), { id: `view-tab-${view}`, dataset: { view } })));
     const scopeControls = ['cloud', 'local', 'both'].map(value => Object.assign(new Element(), { name: 'model-scope', value }));
     const document = {
         getElementById: id => elements.get(id),
@@ -773,8 +984,6 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
         acquireVsCodeApi: () => ({ postMessage: message => messages.push(JSON.parse(JSON.stringify(message))) })
     });
     assert.equal(messages[0].type, 'ready');
-    assert.equal(elements.get('recommendations-view').hidden, false);
-    assert.equal(elements.get('inventory-view').hidden, true);
     assert.equal(elements.get('activity-tabs').children.length, 7);
     assert.equal(elements.get('activity-tabs').children[0].textContent, 'All');
     assert.equal(elements.get('domain-tabs').children.length, 6);
@@ -783,7 +992,7 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
         { id: 'm', name: 'Model', vendor: 'ollama', kind: 'local', selected: true, localTier: 'unrated', pricing: {} },
         { id: 'c', name: 'Cloud', vendor: 'copilot', kind: 'cloud', selected: true, pricing: { source: 'unpriced', budgetClass: 'unpriced' } },
         { id: 'cli', name: 'CLI', vendor: 'copilotcli', kind: 'cloud', selected: true, pricing: { source: 'vscode', budgetClass: 'high' } }
-    ], providerTypes: { ollama: 'local', copilot: 'cloud', copilotcli: 'cloud' }, lockedProviders: ['copilot', 'copilotcli'], dashboard: [
+    ], excludedModels: [], providerPolicyLabel: 'All providers', providerTypes: { ollama: 'local', copilot: 'cloud', copilotcli: 'cloud' }, lockedProviders: ['copilot', 'copilotcli'], dashboard: [
         { activity: 'implement', domain: 'coding', difficulty: 'simple', recommendedModelId: 'c', recommendedVendor: 'copilot', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', sampleCount: 4, pooledSampleCount: 2, selectionMode: 'pooled', candidates: [{ id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'pooled', evidenceSource: 'mixed', samples: 3, pooledSamples: 2, successes: 3, failures: 1, score: 2 / 3, averageDurationMs: 1250, averageCostUsd: 0.0123, pricing: { source: 'vscode', budgetClass: 'low' } }] },
         { activity: 'advise', domain: 'infrastructure', difficulty: 'complex', recommendedModelId: 'm', recommendedVendor: 'ollama', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', manualSelection: { modelId: 'm', vendor: 'ollama' }, sampleCount: 0, pooledSampleCount: 0, selectionMode: 'manual', eligibleCount: 1, candidates: [{ id: 'm', name: 'Model', vendor: 'ollama', selectionMode: 'manual', pricing: { source: 'local', budgetClass: 'low' } }, { id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'learned', pricing: { source: 'vscode', budgetClass: 'low' } }] }
     ], recordCount: 6, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true, pinnedAdvisorModel: { modelId: 'c', vendor: 'copilot' } } });
@@ -809,21 +1018,11 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
     assert.equal(manualCell.children[1].attributes['aria-label'].startsWith('Clear manual selection'), true);
     assert.equal(manualCell.children[2].textContent, 'Suggested: Cloud (copilot)');
     assert.equal(elements.get('context-domain-heading').hidden, false);
-    assert.equal(elements.get('model-count').textContent, '3 models');
     const advisorDefault = elements.get('advisor-default-model');
     assert.deepEqual(advisorDefault.children.map(option => option.textContent), ['Learned recommendations', 'Model (ollama)', 'Cloud (copilot)', 'CLI (copilotcli)']);
     assert.equal(advisorDefault.children[0].value, '');
     assert.equal(advisorDefault.value, JSON.stringify(['copilot', 'c']));
     assert.equal(elements.get('pin-advisor-model'), undefined);
-    assert.equal(elements.get('model-count-label').textContent, '3 models');
-    elements.get('model-search').value = 'Cloud';
-    elements.get('view-tabs').children[1].listeners.click();
-    assert.equal(elements.get('recommendations-view').hidden, true);
-    assert.equal(elements.get('inventory-view').hidden, false);
-    assert.equal(elements.get('model-search').value, 'Cloud');
-    elements.get('view-tabs').children[0].listeners.click();
-    assert.equal(elements.get('recommendations-view').hidden, false);
-    assert.equal(elements.get('inventory-view').hidden, true);
     assert.notEqual(elements.get('context-difficulty-heading').hidden, true);
     elements.get('activity-tabs').children[0].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
     assert.equal(elements.get('recommendations').children.length, 1);
@@ -851,30 +1050,6 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
     assert.equal(elements.get('model-priority').value, 'cloud-first');
     elements.get('model-priority').listeners.change({ target: { value: 'local-first' } });
     assert.deepEqual(messages.at(-1), { type: 'setModelPriority', priority: 'local-first' });
-    const row = elements.get('models').children[0];
-    const checkbox = row.children[0].children[0];
-    checkbox.checked = false;
-    checkbox.listeners.change();
-    assert.deepEqual(messages.at(-1), { type: 'setModelSelected', id: 'm', vendor: 'ollama', selected: false });
-    const select = row.children[3].children[0];
-    assert.equal(select.children[3].textContent, 'High (complex)');
-    select.value = 'standard';
-    select.listeners.change();
-    assert.deepEqual(messages.at(-1), { type: 'setLocalTier', id: 'm', vendor: 'ollama', tier: 'standard' });
-    const provider = elements.get('providers').children[2].children[1].children[0];
-    provider.listeners.click();
-    assert.deepEqual(messages.at(-1), { type: 'setProviderSelected', vendor: 'ollama', selected: false });
-    const providerType = elements.get('providers').children[2].children[2].children[0];
-    providerType.value = 'cloud';
-    providerType.listeners.change();
-    assert.deepEqual(messages.at(-1), { type: 'setProviderType', vendor: 'ollama', kind: 'cloud' });
-    assert.equal(elements.get('providers').children[0].children[2].textContent, 'Cloud');
-    assert.equal(elements.get('providers').children[1].children[2].textContent, 'Cloud');
-    assert.equal(elements.get('models').children[2].children[3].textContent, 'high');
-    const priceTier = elements.get('models').children[1].children[3].children[0];
-    priceTier.value = 'medium';
-    priceTier.listeners.change();
-    assert.deepEqual(messages.at(-1), { type: 'setManualPriceTier', id: 'c', vendor: 'copilot', tier: 'medium' });
     const manualOverride = elements.get('recommendations').children[0].children[3];
     manualOverride.children[0].listeners.click();
     assert.deepEqual(messages.at(-1), {
@@ -893,7 +1068,7 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
     advisorDefault.listeners.change();
     assert.deepEqual(messages.at(-1), { type: 'setAdvisorPinnedModel', model: { modelId: 'm', vendor: 'ollama' } });
     assert.equal(messages.some(message => message.type === 'pinAdvisorModel'), false);
-    receive({ data: { type: 'learningDashboard', models: [], providerTypes: {}, lockedProviders: [], dashboard: [], recordCount: 0, scope: 'cloud', priority: 'local-first', hasSelectedLocalModel: false, pinnedAdvisorModel: { modelId: 'gone', vendor: 'x' } } });
+    receive({ data: { type: 'learningDashboard', models: [], excludedModels: [], providerPolicyLabel: 'All providers', providerTypes: {}, lockedProviders: [], dashboard: [], recordCount: 0, scope: 'cloud', priority: 'local-first', hasSelectedLocalModel: false, pinnedAdvisorModel: { modelId: 'gone', vendor: 'x' } } });
     assert.deepEqual(advisorDefault.children.map(option => option.textContent), ['Learned recommendations', 'Unavailable: gone (x)']);
     assert.equal(advisorDefault.value, JSON.stringify(['x', 'gone']));
     assert.equal(elements.get('model-priority').disabled, true);
@@ -932,7 +1107,7 @@ test('advisor default pin is validated, cleared, and yields to manual overrides'
             registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
             selectChatModels: async () => models
         },
-        workspace: { getConfiguration: () => ({ get: () => [] }), onDidChangeConfiguration: () => ({ dispose() {} }) },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() {} }) },
         commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
         window: {
             registerTreeDataProvider: () => ({ dispose() {} }),

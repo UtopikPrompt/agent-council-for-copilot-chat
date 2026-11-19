@@ -135,8 +135,32 @@ function averageMetric(records, key, context) {
     return totalWeight ? values.reduce((total, entry) => total + entry.value * entry.weight, 0) / totalWeight : null;
 }
 
+// Soft ordering among eligible candidates; manual selections still take precedence.
+function normalizeWorkspacePreference(value) {
+    const vendor = typeof value?.preferredProvider === 'string' ? value.preferredProvider.trim() : '';
+    const modelId = typeof value?.preferredModel === 'string' ? value.preferredModel.trim() : '';
+    if (!vendor && !modelId) return null;
+    return vendor ? { vendor, modelId: modelId || null } : { invalid: true };
+}
+
+function matchesWorkspacePreference(candidate, preference) {
+    return Boolean(preference && !preference.invalid
+        && candidate.vendor === preference.vendor
+        && (!preference.modelId || candidate.id === preference.modelId));
+}
+
+function describeWorkspacePreference(preference, candidates, recommended) {
+    if (!preference) return { status: 'not-configured' };
+    if (preference.invalid) return { status: 'invalid' };
+    const eligibleMatch = candidates.some(candidate => Number.isFinite(candidate.cost) && matchesWorkspacePreference(candidate, preference));
+    const status = !eligibleMatch ? 'no-eligible-match'
+        : recommended && matchesWorkspacePreference(recommended, preference) ? 'applied' : 'not-selected';
+    return { status, vendor: preference.vendor, modelId: preference.modelId };
+}
+
 function getModelRecommendations(scorecardValue, options) {
     const { role, models, getPricing, getModelKind, preference } = options;
+    const workspacePreference = normalizeWorkspacePreference(options.workspacePreference);
     const contextual = isLearningContext(options);
     const difficulty = contextual ? options.difficulty : options.taskCategory;
     const context = {
@@ -196,6 +220,7 @@ function getModelRecommendations(scorecardValue, options) {
     }
     candidates.sort((left, right) => Number(Number.isFinite(right.cost)) - Number(Number.isFinite(left.cost))
         || (difficulty === 'complex' ? Number(['learned', 'pooled'].includes(right.selectionMode)) - Number(['learned', 'pooled'].includes(left.selectionMode)) : 0)
+        || (workspacePreference ? Number(matchesWorkspacePreference(right, workspacePreference)) - Number(matchesWorkspacePreference(left, workspacePreference)) : 0)
         || (preference ? Number(right.kind === preference) - Number(left.kind === preference) : 0)
         || right.utility - left.utility
         || right.score - left.score
@@ -225,6 +250,7 @@ function getModelRecommendations(scorecardValue, options) {
         learnedRecommendedVendor: learnedRecommendation?.vendor || null,
         manualSelection,
         selectionMode: manualSelection ? manualUnavailable ? 'manual-unavailable' : 'manual' : recommended?.selectionMode || 'fallback',
+        workspacePreference: describeWorkspacePreference(workspacePreference, candidates, recommended),
         candidates
     };
 }
@@ -267,6 +293,7 @@ function compactModelRecommendations(result) {
         learnedRecommendedVendor: result.learnedRecommendedVendor,
         manualSelection: result.manualSelection,
         selectionMode: result.selectionMode,
+        workspacePreference: result.workspacePreference,
         activity: result.activity,
         domain: result.domain,
         difficulty: result.difficulty,
@@ -299,7 +326,7 @@ function getLearningDashboard(scorecardValue, models, getPricing, options = {}) 
     return ROLES.flatMap(role => TASK_CATEGORIES.map(taskCategory => {
         const recommendation = getModelRecommendations(scorecard, {
             role, taskCategory, models: options.getModelsForTask ? options.getModelsForTask(taskCategory) : models,
-            getPricing, getModelKind: options.getModelKind, preference: options.preference
+            getPricing, getModelKind: options.getModelKind, preference: options.preference, workspacePreference: options.workspacePreference
         });
         const sampleCount = scorecard.records.filter(record => record.role === role && record.taskCategory === taskCategory).length;
         return {
@@ -318,7 +345,7 @@ function getContextualLearningDashboard(scorecardValue, models, getPricing, opti
     return ACTIVITIES.flatMap(activity => DOMAINS.flatMap(domain => TASK_CATEGORIES.map(difficulty => {
         const recommendation = getModelRecommendations(scorecard, {
             activity, domain, difficulty, models: options.getModelsForTask ? options.getModelsForTask(difficulty) : models,
-            getPricing, getModelKind: options.getModelKind, preference: options.preference,
+            getPricing, getModelKind: options.getModelKind, preference: options.preference, workspacePreference: options.workspacePreference,
             manualSelection: options.getManualSelection ? options.getManualSelection({ activity, domain, difficulty }) : undefined
         });
         const exactSamples = scorecard.records.filter(record => contextWeight(record, { contextual: true, activity, domain, difficulty }) === 1).length;
@@ -349,12 +376,17 @@ function priceOf(pricing) {
     return { low: 75, medium: 575, high: 1001 }[pricing?.budgetClass] ?? Number.POSITIVE_INFINITY;
 }
 
+function hasFinitePrice(pricing) {
+    return Number.isFinite(priceOf(pricing));
+}
+
 module.exports = {
     ACTIVITIES,
     compactModelRecommendations,
     DOMAINS,
     excludeUnavailableModels,
     FAILURE_CODES,
+    hasFinitePrice,
     OUTCOMES,
     ROLES,
     TASK_CATEGORIES,

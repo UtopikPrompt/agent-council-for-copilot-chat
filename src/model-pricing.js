@@ -1,3 +1,5 @@
+const { isProviderEnabled } = require('./provider-availability');
+
 const PRICE_SNAPSHOT_DATE = '2026-11-16';
 
 const MODEL_PRICES = {
@@ -154,6 +156,7 @@ function isModelSelected(model, localModelVendors, classifications = {}, selecti
 
 function hasSelectedLocalModel(models, policy) {
     return models.some(model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes) === 'local'
+        && isProviderEnabled(model.vendor, policy.providerAvailability)
         && isModelSelected(model, policy.localModelVendors, policy.classifications, policy.selections, policy.providerTypes));
 }
 
@@ -163,7 +166,8 @@ function effectiveModelScope(models, policy) {
 }
 
 function getInventorySummary(models, policy) {
-    const selected = models.filter(model => isModelSelected(model, policy.localModelVendors, policy.classifications, policy.selections, policy.providerTypes));
+    const selected = models.filter(model => isProviderEnabled(model.vendor, policy.providerAvailability)
+        && isModelSelected(model, policy.localModelVendors, policy.classifications, policy.selections, policy.providerTypes));
     const localModels = selected.filter(model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes) === 'local');
     return {
         scope: effectiveModelScope(models, policy),
@@ -178,6 +182,7 @@ function getInventorySummary(models, policy) {
 function selectModels(models, localModelVendors, classifications, scope, options = {}) {
     return models.filter(model => {
         const kind = modelKind(model, localModelVendors, classifications, options.providerTypes);
+        if (!isProviderEnabled(model.vendor, options.providerAvailability)) return false;
         if (!isModelSelected(model, localModelVendors, classifications, options.selections, options.providerTypes) || kind === 'unknown') return false;
         if (scope === 'cloud' || scope === 'local') {
             if (kind !== scope) return false;
