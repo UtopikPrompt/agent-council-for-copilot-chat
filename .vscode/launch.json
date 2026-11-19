@@ -2,20 +2,9 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Agent Roster: Extension Development Host",
-            "type": "extensionHost",
-            "request": "launch",
-            "noDebug": true,
-            "preLaunchTask": "npm: vscode:prepublish",
-            "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}"
-            ]
-        },
-        {
             "name": "Agent Roster: Debug Extension Development Host",
             "type": "extensionHost",
             "request": "launch",
-            "noDebug": false,
             "preLaunchTask": "npm: vscode:prepublish",
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}"

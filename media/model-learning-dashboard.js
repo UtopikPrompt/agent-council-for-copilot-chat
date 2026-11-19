@@ -15,6 +15,7 @@
     let hasSelectedLocalModel = false;
     let providerTypes = {};
     let lockedProviders = [];
+    let pinnedAdvisorModel = null;
 
     const byId = id => document.getElementById(id);
 
@@ -231,6 +232,8 @@
         }
     }
 
+    
+
     function renderDashboard() {
         const body = byId('recommendations');
         body.replaceChildren();
@@ -335,12 +338,39 @@
         }
     }
 
+    function advisorOptionValue(model) {
+        return JSON.stringify([model.vendor, model.modelId ?? model.id]);
+    }
+
+    function renderAdvisorDefault() {
+        const select = byId('advisor-default-model');
+        select.replaceChildren();
+        const learned = document.createElement('option');
+        learned.value = '';
+        learned.textContent = 'Learned recommendations';
+        select.append(learned);
+        for (const model of models) {
+            const option = document.createElement('option');
+            option.value = advisorOptionValue(model);
+            option.textContent = `${model.name} (${model.vendor})`;
+            select.append(option);
+        }
+        if (pinnedAdvisorModel && !models.some(model => model.id === pinnedAdvisorModel.modelId && model.vendor === pinnedAdvisorModel.vendor)) {
+            const unavailable = document.createElement('option');
+            unavailable.value = advisorOptionValue(pinnedAdvisorModel);
+            unavailable.textContent = `Unavailable: ${pinnedAdvisorModel.modelId} (${pinnedAdvisorModel.vendor})`;
+            select.append(unavailable);
+        }
+        select.value = pinnedAdvisorModel ? advisorOptionValue(pinnedAdvisorModel) : '';
+    }
+
     function setStatus(message, state) {
         const status = byId('learning-status');
         status.className = `model-load-status ${state}`;
         status.setAttribute('aria-busy', String(state === 'is-loading'));
         byId('learning-message').textContent = message;
         byId('refresh-learning').disabled = state === 'is-loading';
+        byId('advisor-default-model').disabled = state === 'is-loading';
         byId('model-search').disabled = state === 'is-loading';
         byId('model-priority').disabled = state === 'is-loading' || scope !== 'both' || !hasSelectedLocalModel;
         for (const control of document.querySelectorAll('#model-scope input, #models select, #models input, #provider-controls button, #provider-types select')) {
@@ -355,6 +385,12 @@
     }
 
     byId('refresh-learning').addEventListener('click', refresh);
+    byId('advisor-default-model').addEventListener('change', () => {
+        const value = byId('advisor-default-model').value;
+        const [vendor, modelId] = value ? JSON.parse(value) : [];
+        setStatus('Saving Aro and advisor default model...', 'is-loading');
+        vscode.postMessage({ type: 'setAdvisorPinnedModel', model: value ? { modelId, vendor } : null });
+    });
     byId('model-search').addEventListener('input', renderModels);
     initializeViewTabs();
     renderActivityTabs();
@@ -380,10 +416,12 @@
             hasSelectedLocalModel = message.hasSelectedLocalModel;
             providerTypes = message.providerTypes;
             lockedProviders = message.lockedProviders;
+            pinnedAdvisorModel = message.pinnedAdvisorModel ?? null;
             for (const control of document.querySelectorAll('#model-scope input')) control.checked = control.value === scope;
             byId('model-priority').value = priority;
             renderModels();
             renderProviders();
+            renderAdvisorDefault();
             renderDashboard();
             setStatus(scope === 'local' && !hasSelectedLocalModel
                 ? `Local only: no selected local model available. ${message.recordCount} outcomes stored.`
@@ -393,6 +431,7 @@
             byId('model-priority').value = priority;
             renderModels();
             renderProviders();
+            renderAdvisorDefault();
             setStatus(`Could not load learning data: ${message.error}`, 'is-error');
         } else if (message.type === 'learningDashboardLoading') {
             setStatus('Loading model rates and Aro outcome history...', 'is-loading');

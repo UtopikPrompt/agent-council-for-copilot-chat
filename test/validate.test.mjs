@@ -32,7 +32,8 @@ test('validates the complete council and all extracted workflow consumers', asyn
 });
 
 test('Aro learns model outcomes by contextual activity, domain, and difficulty', async () => {
-    const { metadata, body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    const { metadata, body: rawBody } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    const body = rawBody.replace(/\r\n/g, '\n');
     const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     const extensionId = `${manifest.publisher}.${manifest.name}`;
     assert.deepEqual(metadata.model, ['GPT-6 Luna', 'Claude Haiku 5.5']);
@@ -353,7 +354,7 @@ test('sidebar quick controls and status follow saved model policy and outcomes',
     const row = label => rows.find(item => item.label === label);
     assert.equal(row('Scope').description, 'Both');
     assert.equal(row('Priority').description, 'Cloud first');
-    assert.equal(row('Advisor model'), undefined);
+    assert.equal(row('Advisor model').description, 'Learned recommendation');
     assert.equal(row('Selected models').description, '1 cloud / 1 local');
     assert.equal(row('Unclassified selected').description, '1');
     assert.equal(row('Unrated local').description, '0');
@@ -755,7 +756,7 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
         append(...children) { this.children.push(...children); }
         replaceChildren() { this.children = []; }
     }
-    for (const id of ['models', 'model-search', 'model-count', 'model-count-label', 'recommendations', 'recommendations-panel', 'recommendations-view', 'inventory-view', 'view-tabs', 'learning-status', 'learning-message', 'refresh-learning', 'model-scope', 'model-priority', 'providers', 'activity-tabs', 'domain-tabs', 'context-count', 'context-activity-heading', 'context-domain-heading', 'context-difficulty-heading']) {
+    for (const id of ['models', 'model-search', 'model-count', 'model-count-label', 'recommendations', 'recommendations-panel', 'recommendations-view', 'inventory-view', 'view-tabs', 'learning-status', 'learning-message', 'refresh-learning', 'advisor-default-model', 'model-scope', 'model-priority', 'providers', 'activity-tabs', 'domain-tabs', 'context-count', 'context-activity-heading', 'context-domain-heading', 'context-difficulty-heading']) {
         elements.set(id, new Element());
     }
     elements.get('view-tabs').append(...['recommendations', 'inventory'].map(view => Object.assign(new Element(), { id: `view-tab-${view}`, dataset: { view } })));
@@ -785,7 +786,7 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
     ], providerTypes: { ollama: 'local', copilot: 'cloud', copilotcli: 'cloud' }, lockedProviders: ['copilot', 'copilotcli'], dashboard: [
         { activity: 'implement', domain: 'coding', difficulty: 'simple', recommendedModelId: 'c', recommendedVendor: 'copilot', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', sampleCount: 4, pooledSampleCount: 2, selectionMode: 'pooled', candidates: [{ id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'pooled', evidenceSource: 'mixed', samples: 3, pooledSamples: 2, successes: 3, failures: 1, score: 2 / 3, averageDurationMs: 1250, averageCostUsd: 0.0123, pricing: { source: 'vscode', budgetClass: 'low' } }] },
         { activity: 'advise', domain: 'infrastructure', difficulty: 'complex', recommendedModelId: 'm', recommendedVendor: 'ollama', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', manualSelection: { modelId: 'm', vendor: 'ollama' }, sampleCount: 0, pooledSampleCount: 0, selectionMode: 'manual', eligibleCount: 1, candidates: [{ id: 'm', name: 'Model', vendor: 'ollama', selectionMode: 'manual', pricing: { source: 'local', budgetClass: 'low' } }, { id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'learned', pricing: { source: 'vscode', budgetClass: 'low' } }] }
-    ], recordCount: 6, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true } });
+    ], recordCount: 6, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true, pinnedAdvisorModel: { modelId: 'c', vendor: 'copilot' } } });
     assert.equal(elements.get('recommendations').children.length, 2);
     assert.equal(elements.get('recommendations').children[0].children.length, 6);
     assert.equal(elements.get('recommendations').children[0].children[0].textContent, 'Implement');
@@ -809,6 +810,11 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
     assert.equal(manualCell.children[2].textContent, 'Suggested: Cloud (copilot)');
     assert.equal(elements.get('context-domain-heading').hidden, false);
     assert.equal(elements.get('model-count').textContent, '3 models');
+    const advisorDefault = elements.get('advisor-default-model');
+    assert.deepEqual(advisorDefault.children.map(option => option.textContent), ['Learned recommendations', 'Model (ollama)', 'Cloud (copilot)', 'CLI (copilotcli)']);
+    assert.equal(advisorDefault.children[0].value, '');
+    assert.equal(advisorDefault.value, JSON.stringify(['copilot', 'c']));
+    assert.equal(elements.get('pin-advisor-model'), undefined);
     assert.equal(elements.get('model-count-label').textContent, '3 models');
     elements.get('model-search').value = 'Cloud';
     elements.get('view-tabs').children[1].listeners.click();
@@ -880,11 +886,124 @@ test('inventory webview sends scope, selection, tier and provider changes', asyn
     });
     elements.get('model-scope').listeners.change({ target: { name: 'model-scope', value: 'local' } });
     assert.deepEqual(messages.at(-1), { type: 'setModelScope', scope: 'local' });
-    receive({ data: { type: 'learningDashboard', models: [], providerTypes: {}, lockedProviders: [], dashboard: [], recordCount: 0, scope: 'cloud', priority: 'local-first', hasSelectedLocalModel: false } });
+    advisorDefault.value = '';
+    advisorDefault.listeners.change();
+    assert.deepEqual(messages.at(-1), { type: 'setAdvisorPinnedModel', model: null });
+    advisorDefault.value = advisorDefault.children[1].value;
+    advisorDefault.listeners.change();
+    assert.deepEqual(messages.at(-1), { type: 'setAdvisorPinnedModel', model: { modelId: 'm', vendor: 'ollama' } });
+    assert.equal(messages.some(message => message.type === 'pinAdvisorModel'), false);
+    receive({ data: { type: 'learningDashboard', models: [], providerTypes: {}, lockedProviders: [], dashboard: [], recordCount: 0, scope: 'cloud', priority: 'local-first', hasSelectedLocalModel: false, pinnedAdvisorModel: { modelId: 'gone', vendor: 'x' } } });
+    assert.deepEqual(advisorDefault.children.map(option => option.textContent), ['Learned recommendations', 'Unavailable: gone (x)']);
+    assert.equal(advisorDefault.value, JSON.stringify(['x', 'gone']));
     assert.equal(elements.get('model-priority').disabled, true);
     assert.equal(elements.get('model-priority').value, 'local-first');
     assert.equal(scopeControls[0].disabled, false);
     assert.equal(scopeControls[0].checked, true);
     assert.equal(scopeControls[1].disabled, true);
     assert.equal(scopeControls[2].disabled, true);
+});
+
+test('advisor default pin is validated, cleared, and yields to manual overrides', async () => {
+    const tools = new Map();
+    const commands = new Map();
+    const state = new Map();
+    const PIN_KEY = 'agentRoster.modelLearning.advisorPinnedModel.v1';
+    const MANUAL_KEY = 'agentRoster.modelLearning.manualSelections.v1';
+    state.set('agentRoster.modelLearning.inventory.v1', {
+        scope: 'both',
+        providerTypes: { ollama: 'local', copilotcli: 'cloud' },
+        classifications: {},
+        selections: {},
+        localTiers: { '["ollama","local"]': 'simple' }
+    });
+    const models = [
+        { id: 'cloud', name: 'Cloud', vendor: 'copilot', inputCost: 10, outputCost: 50 },
+        { id: 'cli', name: 'CLI', vendor: 'copilotcli', inputCost: 20, outputCost: 100 },
+        { id: 'local', name: 'Local', vendor: 'ollama' }
+    ];
+    let panel;
+    const vscode = {
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        TreeItem: class { constructor(label) { this.label = label; } },
+        TreeItemCollapsibleState: { None: 0 },
+        ThemeIcon: class { constructor(id) { this.id = id; } },
+        lm: {
+            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
+            selectChatModels: async () => models
+        },
+        workspace: { getConfiguration: () => ({ get: () => [] }), onDidChangeConfiguration: () => ({ dispose() {} }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        window: {
+            registerTreeDataProvider: () => ({ dispose() {} }),
+            showQuickPick: async () => undefined,
+            createWebviewPanel: () => {
+                panel = {
+                    webview: {
+                        cspSource: 'test',
+                        asWebviewUri: uri => uri,
+                        onDidReceiveMessage: handler => { panel.receive = handler; },
+                        postMessage: message => { if (['learningDashboard', 'learningDashboardError'].includes(message.type)) panel.resolve(message); }
+                    },
+                    onDidDispose() {}
+                };
+                return panel;
+            }
+        },
+        Uri: { joinPath: (...parts) => parts.join('/') },
+        ViewColumn: { One: 1 },
+        LanguageModelTextPart: class { constructor(value) { this.value = value; } },
+        LanguageModelToolResult: class { constructor(content) { this.content = content; } }
+    };
+    const localRequire = createRequire(path.join(root, 'src/extension.js'));
+    const module = { exports: {} };
+    const source = await readFile(path.join(root, 'src/extension.js'), 'utf8');
+    vm.runInNewContext(source, {
+        module, exports: module.exports,
+        require: name => name === 'vscode' ? vscode : localRequire(name),
+        setTimeout, clearTimeout
+    });
+    const context = {
+        subscriptions: [], extensionUri: 'extension',
+        globalState: { get: key => state.get(key), update: async (key, value) => { state.set(key, value); } }
+    };
+    module.exports.activate(context);
+    assert.equal(typeof commands.get('agentRoster.pinAdvisorModel'), 'function');
+    commands.get('agentRoster.openModelLearning')();
+    const send = async message => {
+        const response = new Promise(resolve => { panel.resolve = resolve; });
+        panel.receive(message);
+        return response;
+    };
+    await send({ type: 'ready' });
+
+    let result = await send({ type: 'setAdvisorPinnedModel', model: { modelId: 'local', vendor: 'ollama' } });
+    assert.equal(result.type, 'learningDashboardError');
+    assert.match(result.error, /not eligible/);
+    result = await send({ type: 'setAdvisorPinnedModel', model: { modelId: 'gone', vendor: 'copilot' } });
+    assert.match(result.error, /not currently available/);
+    result = await send({ type: 'setAdvisorPinnedModel', model: { modelId: 'cloud', vendor: 'copilot' }, excludedProviders: ['copilot'] });
+    assert.match(result.error, /not eligible/);
+    result = await send({ type: 'setAdvisorPinnedModel', model: 'cloud' });
+    assert.match(result.error, /Invalid advisor model/);
+    assert.equal(state.has(PIN_KEY), false);
+
+    let dashboard = await send({ type: 'setAdvisorPinnedModel', model: { modelId: 'cloud', vendor: 'copilot' } });
+    assert.equal(dashboard.type, 'learningDashboard');
+    assert.equal(JSON.stringify(dashboard.pinnedAdvisorModel), JSON.stringify({ modelId: 'cloud', vendor: 'copilot' }));
+    assert.equal(JSON.stringify(state.get(PIN_KEY)), JSON.stringify({ modelId: 'cloud', vendor: 'copilot' }));
+
+    const pinnedResult = await tools.get('aroGetModelRecommendations').invoke({ input: { activity: 'advise', domain: 'coding', difficulty: 'standard' } });
+    assert.equal(JSON.parse(pinnedResult.content[0].value).recommendedModelId, 'cloud');
+
+    state.set(MANUAL_KEY, [{ activity: 'advise', domain: 'coding', difficulty: 'standard', modelId: 'cli', vendor: 'copilotcli' }]);
+    const overrideResult = await tools.get('aroGetModelRecommendations').invoke({ input: { activity: 'advise', domain: 'coding', difficulty: 'standard' } });
+    assert.equal(JSON.parse(overrideResult.content[0].value).selectionMode, 'manual');
+    assert.equal(JSON.parse(overrideResult.content[0].value).recommendedModelId, 'cli');
+    state.set(MANUAL_KEY, []);
+
+    dashboard = await send({ type: 'setAdvisorPinnedModel', model: null });
+    assert.equal(dashboard.type, 'learningDashboard');
+    assert.equal(dashboard.pinnedAdvisorModel, null);
+    assert.equal(state.get(PIN_KEY), null);
 });

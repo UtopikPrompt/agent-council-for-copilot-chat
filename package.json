@@ -77,6 +77,10 @@
                 "title": "Agent Roster: Open Aro Learning"
             },
             {
+                "command": "agentRoster.pinAdvisorModel",
+                "title": "Agent Roster: Set Aro/Advisor Default Model"
+            },
+            {
                 "command": "agentRoster.changeModelScope",
                 "title": "Agent Roster: Change Model Scope"
             },
@@ -455,7 +459,10 @@
         ]
     },
     "devDependencies": {
-        "@vscode/vsce": "^4.1.1",
-        "yaml": "^2.8.1"
+        "@babel/core": "^8.1.2",
+        "@babel/preset-env": "^8.0.7",
+        "@vscode/vsce": "^3.9.1",
+        "babel-jest": "^30.5.2",
+        "yaml": "^2.9.1"
     }
 }
