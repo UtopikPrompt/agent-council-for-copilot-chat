@@ -6,7 +6,7 @@
 	<img src="assets/banner.jpg" alt="Aro, a robot character surrounded by connected specialist nodes" width="640">
 </p>
 
-This extension adds 49 focused helpers to GitHub Copilot Chat. They can help explain a project, solve coding problems, plan changes, improve documentation, and more. Aro is the starting point: describe your task in your own words, and it brings in a helper suited to the work.
+This extension adds 50 focused helpers to GitHub Copilot Chat. They can help explain a project, solve coding problems, plan changes, improve documentation, and more. Aro is the starting point: describe your task in your own words, and it brings in a helper suited to the work.
 
 ## Get Started
 
@@ -45,10 +45,10 @@ Advisors help Aro choose the right specialist for a task. They select a route; t
 
 ## Agents
 
-The roster includes 41 specialist agents, selected by Aro with help from the advisors above.
+The roster includes 42 specialist agents, selected by Aro with help from the advisors above.
 
 <details>
-<summary>Browse all 41 agents</summary>
+<summary>Browse all 42 agents</summary>
 
 | Agent | Purpose |
 | --- | --- |
@@ -79,6 +79,7 @@ The roster includes 41 specialist agents, selected by Aro with help from the adv
 | [GovGithubAgent](agents/GovGithubAgent.agent.md) | Plan agent capabilities and manage GitHub issue triage and filing. |
 | [GovOfficeDocumentGenerator](agents/GovOfficeDocumentGenerator.agent.md) | Create and validate PowerPoint and Visio deliverables. |
 | [GovWebResearchAgent](agents/GovWebResearchAgent.agent.md) | Research current web sources and return evidence-linked findings. |
+| [InfraAzureDevOpsAgent](agents/InfraAzureDevOpsAgent.agent.md) | Read and, after confirmation, change Azure DevOps work items, repos, pull requests, and wiki pages. |
 | [InfraCIDiagnostics](agents/InfraCIDiagnostics.agent.md) | Diagnose CI and GitHub Actions failures and propose minimal fixes. |
 | [InfraCloudDeploymentAgent](agents/InfraCloudDeploymentAgent.agent.md) | Design and implement cross-cloud deployment and provisioning. |
 | [InfraDevContainerSpecialist](agents/InfraDevContainerSpecialist.agent.md) | Configure development containers and workspace environments. |
