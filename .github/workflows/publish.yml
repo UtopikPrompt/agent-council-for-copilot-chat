@@ -24,35 +24,12 @@ jobs:
             - name: Set version from release tag
               env:
                   RELEASE_TAG: ${{ github.event.release.tag_name }}
-                  IS_PRERELEASE: ${{ github.event.release.prerelease }}
               run: |
                   version="${RELEASE_TAG#v}"
-                  semver_regex='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+)(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+                  version_regex='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 
-                  if [[ ! "$version" =~ $semver_regex ]]; then
-                      echo "Invalid SemVer version: $version" >&2
-                      exit 1
-                  fi
-
-                  version_base="${version%%+*}"
-                  if [[ "$version_base" == *-* ]]; then
-                      prerelease="${version_base#*-}"
-                      IFS='.' read -r -a prerelease_identifiers <<< "$prerelease"
-                      for identifier in "${prerelease_identifiers[@]}"; do
-                          if [[ "$identifier" =~ ^[0-9]+$ ]] && [[ "$identifier" =~ ^0[0-9]+$ ]]; then
-                              echo "Invalid SemVer prerelease identifier: $identifier" >&2
-                              exit 1
-                          fi
-                      done
-                  fi
-
-                  is_semver_prerelease="false"
-                  if [[ "$version_base" == *-* ]]; then
-                      is_semver_prerelease="true"
-                  fi
-
-                  if [[ "$IS_PRERELEASE" != "$is_semver_prerelease" ]]; then
-                      echo "GitHub prerelease setting ($IS_PRERELEASE) does not match SemVer prerelease ($is_semver_prerelease) for version $version" >&2
+                  if [[ ! "$version" =~ $version_regex ]]; then
+                      echo "Invalid Marketplace version (expected X.Y.Z): $version" >&2
                       exit 1
                   fi
 
