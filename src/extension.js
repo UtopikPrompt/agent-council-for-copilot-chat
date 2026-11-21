@@ -25,6 +25,8 @@ const {
     resolveProviderAvailability,
     WORKSPACE_PROVIDERS_SETTING
 } = require('./provider-availability');
+const { listProposals } = require('./skill-proposals');
+const { registerSkillProposals } = require('./skill-proposals-ui');
 
 const LEARNING_STORAGE_KEY = 'agentRoster.modelLearning.scorecard.v1';
 const INVENTORY_STORAGE_KEY = 'agentRoster.modelLearning.inventory.v1';
@@ -165,8 +167,10 @@ function createLearningSidebar(context) {
         async getChildren(element) {
             if (element) return [];
             const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
+            const pendingProposals = listProposals(context.globalState).length;
             const rows = [
-                item('Open Aro Learning', '', 'dashboard', openDashboard)
+                item('Open Aro Learning', '', 'dashboard', openDashboard),
+                item('Skill proposals', `${pendingProposals} pending`, 'lightbulb', 'agentRoster.openSkillProposals', 'Review skills Aro proposed. Nothing is created until you accept it.')
             ];
             let models;
             try {
@@ -362,6 +366,42 @@ function toModelSummary(model) {
     };
 }
 
+// Last successful discovery, painted as stale on cold start. Stores model metadata only, never prompts or responses.
+const CATALOG_SNAPSHOT_KEY = 'agentRoster.modelLearning.catalogSnapshot.v1';
+
+function toCatalogSnapshotEntry(model) {
+    if (!model || typeof model !== 'object' || typeof model.id !== 'string' || !model.id
+        || typeof model.vendor !== 'string' || !model.vendor) return undefined;
+    const text = value => typeof value === 'string' ? value : undefined;
+    const rate = value => Number.isFinite(value) ? value : undefined;
+    return {
+        id: model.id,
+        name: text(model.name) ?? model.id,
+        vendor: model.vendor,
+        family: text(model.family),
+        version: text(model.version),
+        inputCost: rate(model.inputCost),
+        outputCost: rate(model.outputCost),
+        cacheCost: rate(model.cacheCost),
+        cacheWriteCost: rate(model.cacheWriteCost),
+        priceCategory: text(model.priceCategory)
+    };
+}
+
+function readCatalogSnapshot(context) {
+    const stored = context.globalState.get(CATALOG_SNAPSHOT_KEY);
+    if (!Array.isArray(stored)) return undefined;
+    return stored.map(toCatalogSnapshotEntry).filter(Boolean);
+}
+
+async function writeCatalogSnapshot(context, summaries) {
+    try {
+        await context.globalState.update(CATALOG_SNAPSHOT_KEY, summaries.map(toCatalogSnapshotEntry).filter(Boolean));
+    } catch {
+        // A failed write only means the next cold start waits for live discovery.
+    }
+}
+
 // Raw discovery rows with enablement for both provider scopes. Provider policy never filters discovery before the catalog is built.
 function getModelCatalogPayload(context, models) {
     const policy = getInventoryPolicy(context);
@@ -484,6 +524,7 @@ async function applyProviderAvailabilityChange(context, message, models) {
 
 function activate(context) {
     context.subscriptions.push(registerModelLearningTools(context));
+    context.subscriptions.push(registerSkillProposals(vscode, context, { onChange: refreshLearningViews }));
     context.subscriptions.push(vscode.commands.registerCommand('agentRoster.openModelLearning', () => openModelLearning(context)));
     context.subscriptions.push(vscode.commands.registerCommand('agentRoster.openModelInventory', scope => openModelInventory(context, scope)));
     context.subscriptions.push(vscode.commands.registerCommand('agentRoster.changeModelScope', () => changeModelScope(context)));
@@ -597,7 +638,46 @@ function openModelLearning(context) {
 
     let refreshPromise;
     let refreshRequested = false;
+    let liveModelsShown = false;
     let inventoryModels = [];
+    const renderDashboard = (summaries, stale) => {
+        const policy = getInventoryPolicy(context);
+        const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
+        const scope = effectiveModelScope(summaries, policy);
+        const getPricing = model => getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers);
+        const manualSelections = getManualSelections(context);
+        const isEnabledInEffectivePolicy = model => isProviderEnabled(model.vendor, policy.providerAvailability);
+        const toInventoryRow = model => ({
+            ...model,
+            kind: modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
+            selected: isModelSelected(model, policy.localModelVendors, policy.classifications, policy.selections, policy.providerTypes),
+            localTier: policy.localTiers[modelKey(model)] || 'unrated',
+            pricing: getPricing(model)
+        });
+        panel.webview.postMessage({
+            type: 'learningDashboard',
+            stale,
+            scope,
+            priority: policy.priority,
+            hasSelectedLocalModel: hasSelectedLocalModel(summaries, policy),
+            models: summaries.filter(isEnabledInEffectivePolicy).map(toInventoryRow),
+            dashboard: getContextualLearningDashboard(scorecard, summaries, getPricing, {
+                getModelsForTask: difficulty => selectModels(summaries, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: difficulty }),
+                getManualSelection: context => getManualSelection(manualSelections, context),
+                getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
+                preference: scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined,
+                workspacePreference: getWorkspacePreference()
+            }),
+            pinnedAdvisorModel: getAdvisorPinnedModel(context),
+            workspacePreference: getWorkspacePreferenceView(summaries, policy, scope),
+            recordCount: scorecard.records.length
+        });
+    };
+    // Changes validate against this panel's live discovery. A stale paint never satisfies this gate.
+    const awaitLiveInventory = async () => {
+        while (refreshPromise) await refreshPromise;
+        if (!liveModelsShown) throw new Error('Refresh the model list before changing these settings.');
+    };
     const refresh = async () => {
         if (refreshPromise) {
             refreshRequested = true;
@@ -605,39 +685,15 @@ function openModelLearning(context) {
         }
         panel.webview.postMessage({ type: 'learningDashboardLoading' });
         refreshPromise = (async () => {
-            const policy = getInventoryPolicy(context);
+            // Paints the persisted snapshot until live discovery replaces it. inventoryModels stays live-only.
+            const cached = liveModelsShown ? undefined : readCatalogSnapshot(context);
+            if (cached) renderDashboard(cached, true);
             const models = await selectChatModelsWithTimeout();
-            const scorecard = normalizeScorecard(context.globalState.get(LEARNING_STORAGE_KEY));
             const summaries = models.map(toModelSummary);
             inventoryModels = summaries;
-            const scope = effectiveModelScope(summaries, policy);
-            const getPricing = model => getManagedPricing(model, policy.localModelVendors, policy.classifications, policy.providerTypes, policy.manualPriceTiers);
-            const manualSelections = getManualSelections(context);
-            const isEnabledInEffectivePolicy = model => isProviderEnabled(model.vendor, policy.providerAvailability);
-            const toInventoryRow = model => ({
-                ...model,
-                kind: modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
-                selected: isModelSelected(model, policy.localModelVendors, policy.classifications, policy.selections, policy.providerTypes),
-                localTier: policy.localTiers[modelKey(model)] || 'unrated',
-                pricing: getPricing(model)
-            });
-            panel.webview.postMessage({
-                type: 'learningDashboard',
-                scope,
-                priority: policy.priority,
-                hasSelectedLocalModel: hasSelectedLocalModel(summaries, policy),
-                models: summaries.filter(isEnabledInEffectivePolicy).map(toInventoryRow),
-                dashboard: getContextualLearningDashboard(scorecard, summaries, getPricing, {
-                    getModelsForTask: difficulty => selectModels(summaries, policy.localModelVendors, policy.classifications, scope, { ...policy, taskCategory: difficulty }),
-                    getManualSelection: context => getManualSelection(manualSelections, context),
-                    getModelKind: model => modelKind(model, policy.localModelVendors, policy.classifications, policy.providerTypes),
-                    preference: scope === 'both' ? policy.priority === 'local-first' ? 'local' : 'cloud' : undefined,
-                    workspacePreference: getWorkspacePreference()
-                }),
-                pinnedAdvisorModel: getAdvisorPinnedModel(context),
-                workspacePreference: getWorkspacePreferenceView(summaries, policy, scope),
-                recordCount: scorecard.records.length
-            });
+            liveModelsShown = true;
+            renderDashboard(summaries, false);
+            void writeCatalogSnapshot(context, summaries);
         })().catch(error => {
             panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
         }).finally(() => {
@@ -655,10 +711,11 @@ function openModelLearning(context) {
         if (message.type === 'ready' || message.type === 'refreshLearning') void refresh();
         if (message.type === 'openModelInventory') {
             void vscode.commands.executeCommand('agentRoster.openModelInventory');
-            return;
+            return;LiveInventory
         }
         if (message.type === 'setWorkspacePreference') {
             void enqueueInventoryUpdate(async () => {
+                await awaitLiveInventory();
                 const policy = getInventoryPolicy(context);
                 const scope = effectiveModelScope(inventoryModels, policy);
                 await applyWorkspacePreference(message, inventoryModels, policy, scope);
@@ -680,10 +737,11 @@ function openModelLearning(context) {
             }).catch(error => {
                 panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
             });
-            return;
+            return;LiveInventory
         }
         if (['chooseManualModel', 'useLearnedModel'].includes(message.type)) {
             void enqueueInventoryUpdate(async () => {
+                await awaitLiveInventory();
                 const learningContext = {
                     activity: message.activity,
                     domain: message.domain,
@@ -735,10 +793,11 @@ function openModelLearning(context) {
             }).catch(error => {
                 panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
             });
-            return;
+            return;LiveInventory
         }
         if (['setModelScope', 'setModelPriority'].includes(message.type)) {
             void enqueueInventoryUpdate(async () => {
+                await awaitLiveInventory();
                 const policy = getInventoryPolicy(context);
                 if (message.type === 'setModelScope') {
                     if (!['cloud', 'local', 'both'].includes(message.scope)) throw new Error('Invalid model scope.');

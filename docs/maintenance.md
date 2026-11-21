@@ -34,8 +34,8 @@ The Git worker's embedded PR procedure no longer requires separately installed P
 
 - `agents/`: packaged custom agent definitions.
 - `skills/<name>/SKILL.md`: packaged, independently discoverable workflows.
-- `src/`: extension-host activation, model-learning tools, policy and pricing.
-- `media/`: Aro Learning dashboard assets.
+- `src/`: extension-host activation, model-learning tools, policy and pricing; `skill-proposals.js` (storage and validation) and `skill-proposals-ui.js` (`aroProposeSkill` tool, review page, acceptance) implement the user-approved skill inbox.
+- `media/`: Aro Learning dashboard and skill-proposal review assets.
 - `docs/agents.md`: role catalog; `docs/skills.md`: shared workflow catalog.
 - `docs/extraction-map.json`: shared-workflow provenance and consumers.
 - `scripts/validate.mjs` and `test/`: structural lint and regression tests; not shipped in the VSIX.

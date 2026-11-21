@@ -1,0 +1,54 @@
+.proposal-layout {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(180px, 260px) 1fr;
+}
+
+.proposal-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.proposal-list button {
+    display: block;
+    margin-bottom: 6px;
+    text-align: left;
+    width: 100%;
+}
+
+.proposal-list button[aria-current="true"] {
+    border-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.proposal-form label {
+    display: block;
+    margin-bottom: 12px;
+}
+
+.proposal-form input,
+.proposal-form textarea {
+    background: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border, var(--border));
+    color: var(--vscode-input-foreground);
+    display: block;
+    font: inherit;
+    margin-top: 4px;
+    width: 100%;
+}
+
+.proposal-form textarea {
+    font-family: var(--vscode-editor-font-family, monospace);
+    resize: vertical;
+}
+
+.proposal-errors {
+    color: var(--vscode-errorForeground, #f48771);
+    white-space: pre-line;
+}
+
+.proposal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}

@@ -290,6 +290,27 @@ test('Aro consults the required domain advisor before every specialist dispatch'
     assert.doesNotMatch(body, /Optional Advisor/);
 });
 
+test('Aro has no workspace read or search tools; workers own evidence and skill procedures', async () => {
+    const { metadata, body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+    const extensionId = `${manifest.publisher}.${manifest.name}`;
+    for (const tool of ['vscode/askQuestions', 'agent', `${extensionId}/aroGetModelRecommendations`, `${extensionId}/aroRecordModelOutcome`, `${extensionId}/aroProposeSkill`]) {
+        assert.ok(metadata.tools.includes(tool), `Aro missing routing tool: ${tool}`);
+    }
+    assert.ok(metadata.tools.every(tool => !/^(read|search)(\/|$)/.test(tool)), 'Aro must not have workspace read or search tools');
+    assert.match(body, /Aro has no workspace read,\s+search, or skill tools\./);
+    assert.match(body, /do not load, follow, or inspect skills/);
+    assert.doesNotMatch(body, /\.\.\/skills\//);
+    assert.match(body, /GovWebResearchAgent owns live research, including loading and using its\s+runtime-exposed tools\./);
+    assert.match(body, /Consult DocsGovernanceAdvisor, then invoke the indexed\s+worker/);
+    assert.match(body, /report BLOCKED only if the worker invocation fails or the worker reports\s+its needed tool or service unavailable/);
+    assert.doesNotMatch(body, /discover\/load|deferred tools/);
+    const extractions = JSON.parse(await readFile(path.join(root, 'docs/extraction-map.json'), 'utf8'));
+    for (const entry of extractions) assert.ok(!entry.agents.includes('Aro'), `Aro must not consume ${entry.skill}`);
+    const investigation = extractions.find(entry => entry.skill === 'progressive-investigation');
+    assert.ok(investigation.agents.includes('AgentOptimizer') && investigation.agents.includes('CodeFrameworkDiagnostician'));
+});
+
 test('advisor scopes and shared skill consumers stay aligned', async () => {
     const utility = parseCustomization(await readFile(path.join(root, 'agents/UtilityAdvisor.agent.md'), 'utf8'), 'UtilityAdvisor');
     assert.match(utility.body, /Explicit divergent brainstorming of alternatives, edge cases, or code patterns/);
@@ -319,6 +340,27 @@ test('Aro surfaces evidence-based roster gaps without automatic filing', async (
     assert.match(body, /if filing tools or a verified destination\s+are unavailable, provide the draft/);
 });
 
+test('Aro checks runtime evidence through workers before asking for logs', async () => {
+    const { body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    assert.match(body, /## Runtime Evidence Before Asking/);
+    assert.match(body, /AgentOptimizer for Copilot\s+Chat session traces/);
+    assert.match(body, /Aro does\s+not read logs itself/);
+    assert.match(body, /Copilot Chat session trace records this chat's routing,\s+prompts/);
+    assert.match(body, /is not the VS Code\s+Extension Host, Debug Console or Tasks output/);
+    assert.match(body, /Never treat either source as a\s+substitute/);
+    assert.match(body, /Ask the user only for a source the worker reports as missing, unreadable or outside\s+its tools/);
+    assert.match(body, /Do not state a log's contents/);
+});
+
+test('progressive-investigation skill defines evidence checks before asking for logs', async () => {
+    const skill = await readFile(path.join(root, 'skills/progressive-investigation/SKILL.md'), 'utf8');
+    assert.match(skill, /^## Evidence Before Asking$/m);
+    assert.match(skill, /Do not search personal profiles for logs/);
+    assert.match(skill, /it does not contain VS Code Extension Host, Debug Console or Tasks output/);
+    assert.match(skill, /name the exact missing source/);
+    assert.match(skill, /Remove secrets and unrelated content/);
+});
+
 test('sidebar quick controls and status follow saved model policy and outcomes', async () => {
     const tools = new Map();
     const commands = new Map();
@@ -339,18 +381,18 @@ test('sidebar quick controls and status follow saved model policy and outcomes',
     let refreshes = 0;
     let failDiscovery = false;
     const vscode = {
-        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() { refreshes += 1; } dispose() {} },
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() { } }); } fire() { refreshes += 1; } dispose() { } },
         TreeItem: class { constructor(label) { this.label = label; } },
         TreeItemCollapsibleState: { None: 0 },
         ThemeIcon: class { constructor(id) { this.id = id; } },
         lm: {
-            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
+            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() { } }; },
             selectChatModels: async () => { if (failDiscovery) throw new Error('provider unavailable'); return models; }
         },
-        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() {} }) },
-        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() { } }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() { } }; } },
         window: {
-            registerTreeDataProvider: (name, provider) => { sidebar = provider; return { dispose() {} }; },
+            registerTreeDataProvider: (name, provider) => { sidebar = provider; return { dispose() { } }; },
             showQuickPick: async items => { choices = items; return items.find(item => item.value === nextChoice); },
             showErrorMessage: message => { throw new Error(message); }
         },
@@ -387,9 +429,11 @@ test('sidebar quick controls and status follow saved model policy and outcomes',
     nextChoice = 'local-first';
     await commands.get('agentRoster.changeModelPriority')();
     assert.equal(state.get('agentRoster.modelLearning.inventory.v1').priority, 'local-first');
-    await tools.get('aroRecordModelOutcome').invoke({ input: {
-        role: 'coding', taskCategory: 'simple', modelId: 'local', outcome: 'success', evidenceCode: 'acceptance_passed'
-    } });
+    await tools.get('aroRecordModelOutcome').invoke({
+        input: {
+            role: 'coding', taskCategory: 'simple', modelId: 'local', outcome: 'success', evidenceCode: 'acceptance_passed'
+        }
+    });
     rows = await sidebar.getChildren();
     assert.equal(row('Priority').description, 'Local first');
     assert.equal(row('Outcomes').description, '1');
@@ -415,37 +459,32 @@ test('sidebar scope changes refresh a dashboard already loading', { timeout: 300
     let releaseDiscovery;
     const discoveryGate = new Promise(resolve => { releaseDiscovery = resolve; });
     let delayDiscovery = true;
-    let resolveUpdated;
-    const updated = new Promise(resolve => { resolveUpdated = resolve; });
     const messages = [];
     const panel = {
         webview: {
             cspSource: 'test', asWebviewUri: uri => uri,
             onDidReceiveMessage: handler => { panel.receive = handler; },
             postMessage: message => {
-                if (message.type === 'learningDashboard') {
-                    messages.push(message.scope);
-                    if (message.scope === 'local') resolveUpdated();
-                }
+                if (message.type === 'learningDashboard') messages.push(message.scope);
             }
         },
-        onDidDispose() {}
+        onDidDispose() { }
     };
     const vscode = {
-        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() { } }); } fire() { } dispose() { } },
         TreeItem: class { constructor(label) { this.label = label; } },
-        TreeItemCollapsibleState: { None: 0 }, ThemeIcon: class {},
+        TreeItemCollapsibleState: { None: 0 }, ThemeIcon: class { },
         lm: {
-            registerTool: () => ({ dispose() {} }),
+            registerTool: () => ({ dispose() { } }),
             selectChatModels: async () => {
                 if (delayDiscovery) { delayDiscovery = false; await discoveryGate; }
                 return models;
             }
         },
-        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() {} }) },
-        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() { } }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() { } }; } },
         window: {
-            registerTreeDataProvider: () => ({ dispose() {} }), createWebviewPanel: () => panel,
+            registerTreeDataProvider: () => ({ dispose() { } }), createWebviewPanel: () => panel,
             showQuickPick: async choices => choices.find(choice => choice.value === 'local'),
             showErrorMessage: message => { throw new Error(message); }
         },
@@ -466,8 +505,198 @@ test('sidebar scope changes refresh a dashboard already loading', { timeout: 300
     await commands.get('agentRoster.changeModelScope')();
     assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'local');
     releaseDiscovery();
-    await updated;
-    assert.deepEqual(messages, ['both', 'local']);
+    for (let index = 0; index < 20; index++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(messages.at(-1), 'local');
+});
+
+test('reopened Aro Learning paints the last discovered models while discovery refreshes', { timeout: 3000 }, async () => {
+    const commands = new Map();
+    const state = new Map();
+    state.set('agentRoster.modelLearning.inventory.v1', {
+        scope: 'both', priority: 'cloud-first', providerTypes: { ollama: 'local' }
+    });
+    let models = [{ id: 'cloud', vendor: 'copilot' }];
+    let delayDiscovery = false;
+    let gate = Promise.resolve();
+    const panels = [];
+    const createPanel = () => {
+        const panel = {
+            posted: [],
+            webview: {
+                cspSource: 'test', asWebviewUri: uri => uri,
+                onDidReceiveMessage: handler => { panel.receive = handler; },
+                postMessage: message => { panel.posted.push(message); }
+            },
+            onDidDispose: handler => { panel.disposeHandler = handler; }
+        };
+        panels.push(panel);
+        return panel;
+    };
+    const settle = async () => {
+        for (let index = 0; index < 20; index++) await new Promise(resolve => setImmediate(resolve));
+    };
+    const vscode = {
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() { } }); } fire() { } dispose() { } },
+        TreeItem: class { constructor(label) { this.label = label; } },
+        TreeItemCollapsibleState: { None: 0 }, ThemeIcon: class { },
+        lm: {
+            registerTool: () => ({ dispose() { } }),
+            selectChatModels: async () => {
+                if (delayDiscovery) { delayDiscovery = false; await gate; }
+                return models;
+            }
+        },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() { } }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() { } }; } },
+        window: {
+            registerTreeDataProvider: () => ({ dispose() { } }), createWebviewPanel: createPanel,
+            showErrorMessage: message => { throw new Error(message); }
+        },
+        Uri: { joinPath: (...parts) => parts.join('/') }, ViewColumn: { One: 1 }
+    };
+    const localRequire = createRequire(path.join(root, 'src/extension.js'));
+    const module = { exports: {} };
+    vm.runInNewContext(await readFile(path.join(root, 'src/extension.js'), 'utf8'), {
+        module, exports: module.exports,
+        require: name => name === 'vscode' ? vscode : localRequire(name), setTimeout, clearTimeout
+    });
+    module.exports.activate({
+        subscriptions: [], extensionUri: 'extension',
+        globalState: { get: key => state.get(key), update: async (key, value) => { state.set(key, value); } }
+    });
+
+    commands.get('agentRoster.openModelLearning')();
+    panels[0].receive({ type: 'ready' });
+    await settle();
+    assert.deepEqual(panels[0].posted.filter(message => message.type === 'learningDashboard').map(message => message.stale), [false]);
+    panels[0].disposeHandler();
+
+    models = [{ id: 'cloud', vendor: 'copilot' }, { id: 'local', vendor: 'ollama' }];
+    let releaseDiscovery;
+    gate = new Promise(resolve => { releaseDiscovery = resolve; });
+    delayDiscovery = true;
+    commands.get('agentRoster.openModelLearning')();
+    panels[1].receive({ type: 'ready' });
+    await settle();
+    const stalePosts = panels[1].posted.filter(message => message.type === 'learningDashboard');
+    assert.deepEqual(stalePosts.map(message => [message.stale, message.models.map(model => model.id)]), [[true, ['cloud']]]);
+    assert.equal(panels[1].posted.some(message => message.type === 'learningDashboardLoading'), true);
+
+    panels[1].receive({ type: 'setModelScope', scope: 'local' });
+    releaseDiscovery();
+    await settle();
+    assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'local');
+    assert.equal(panels[1].posted.some(message => message.type === 'learningDashboardError'), false);
+    const freshPosts = panels[1].posted.filter(message => message.type === 'learningDashboard' && message.stale === false);
+    assert.equal(freshPosts.length >= 1, true);
+    assert.deepEqual(freshPosts.at(-1).models.map(model => model.id), ['cloud', 'local']);
+    assert.equal(freshPosts.at(-1).scope, 'local');
+});
+
+async function loadLearningHost({ state, selectChatModels }) {
+    const commands = new Map();
+    const panels = [];
+    const createPanel = () => {
+        const panel = {
+            posted: [],
+            webview: {
+                cspSource: 'test', asWebviewUri: uri => uri,
+                onDidReceiveMessage: handler => { panel.receive = handler; },
+                postMessage: message => { panel.posted.push(message); }
+            },
+            onDidDispose: handler => { panel.disposeHandler = handler; }
+        };
+        panels.push(panel);
+        return panel;
+    };
+    const vscode = {
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() { } }); } fire() { } dispose() { } },
+        TreeItem: class { constructor(label) { this.label = label; } },
+        TreeItemCollapsibleState: { None: 0 }, ThemeIcon: class { },
+        lm: { registerTool: () => ({ dispose() { } }), selectChatModels },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() { } }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() { } }; } },
+        window: {
+            registerTreeDataProvider: () => ({ dispose() { } }), createWebviewPanel: createPanel,
+            showErrorMessage: message => { throw new Error(message); }
+        },
+        Uri: { joinPath: (...parts) => parts.join('/') }, ViewColumn: { One: 1 }
+    };
+    const localRequire = createRequire(path.join(root, 'src/extension.js'));
+    const module = { exports: {} };
+    vm.runInNewContext(await readFile(path.join(root, 'src/extension.js'), 'utf8'), {
+        module, exports: module.exports,
+        require: name => name === 'vscode' ? vscode : localRequire(name), setTimeout, clearTimeout
+    });
+    module.exports.activate({
+        subscriptions: [], extensionUri: 'extension',
+        globalState: { get: key => state.get(key), update: async (key, value) => { state.set(key, value); } }
+    });
+    const settle = async () => {
+        for (let index = 0; index < 20; index++) await new Promise(resolve => setImmediate(resolve));
+    };
+    return { commands, panels, settle };
+}
+
+test('a cold start paints the persisted catalog as stale and gates every change on live discovery', { timeout: 3000 }, async () => {
+    const state = new Map([
+        ['agentRoster.modelLearning.inventory.v1', { scope: 'both', priority: 'cloud-first', providerTypes: { ollama: 'local' } }],
+        ['agentRoster.modelLearning.catalogSnapshot.v1', [
+            { id: 'cloud', name: 'Cloud', vendor: 'copilot' },
+            { id: 'local', name: 'Local', vendor: 'ollama' }
+        ]]
+    ]);
+    let releaseDiscovery;
+    const gate = new Promise(resolve => { releaseDiscovery = resolve; });
+    const host = await loadLearningHost({
+        state,
+        selectChatModels: async () => {
+            await gate;
+            return [{ id: 'cloud', name: 'Cloud', vendor: 'copilot' }];
+        }
+    });
+    host.commands.get('agentRoster.openModelLearning')();
+    const panel = host.panels[0];
+    panel.receive({ type: 'ready' });
+    await host.settle();
+
+    const dashboards = () => panel.posted.filter(message => message.type === 'learningDashboard');
+    assert.deepEqual(dashboards().map(message => [message.stale, message.models.map(model => model.id)]), [[true, ['cloud', 'local']]]);
+    assert.equal(panel.posted.some(message => message.type === 'learningDashboardLoading'), true);
+
+    panel.receive({ type: 'setModelScope', scope: 'local' });
+    releaseDiscovery();
+    await host.settle();
+
+    assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'both');
+    assert.deepEqual(panel.posted.filter(message => message.type === 'learningDashboardError').map(message => message.error),
+        ['Select a local model before using this scope.']);
+    assert.deepEqual(dashboards().filter(message => message.stale === false).at(-1).models.map(model => model.id), ['cloud']);
+    assert.deepEqual(state.get('agentRoster.modelLearning.catalogSnapshot.v1').map(model => model.id), ['cloud']);
+});
+
+test('a failed cold-start discovery keeps the persisted catalog stale and refuses changes', { timeout: 3000 }, async () => {
+    const state = new Map([
+        ['agentRoster.modelLearning.inventory.v1', { scope: 'both', priority: 'cloud-first', providerTypes: {} }],
+        ['agentRoster.modelLearning.catalogSnapshot.v1', [{ id: 'cloud', name: 'Cloud', vendor: 'copilot' }]]
+    ]);
+    const host = await loadLearningHost({ state, selectChatModels: async () => { throw new Error('offline'); } });
+    host.commands.get('agentRoster.openModelLearning')();
+    const panel = host.panels[0];
+    panel.receive({ type: 'ready' });
+    await host.settle();
+
+    assert.deepEqual(panel.posted.filter(message => message.type === 'learningDashboard').map(message => message.stale), [true]);
+    assert.equal(panel.posted.filter(message => message.type === 'learningDashboardError').length, 1);
+    assert.match(panel.posted.find(message => message.type === 'learningDashboardError').error, /offline/);
+    panel.receive({ type: 'setModelScope', scope: 'cloud' });
+    await host.settle();
+
+    assert.equal(state.get('agentRoster.modelLearning.inventory.v1').scope, 'both');
+    assert.equal(panel.posted.filter(message => message.type === 'learningDashboardError').at(-1).error,
+        'Refresh the model list before changing these settings.');
+    assert.equal(panel.posted.some(message => message.type === 'learningDashboard' && message.stale === false), false);
+    assert.deepEqual(state.get('agentRoster.modelLearning.catalogSnapshot.v1').map(model => model.id), ['cloud']);
 });
 
 test('inventory changes persist and affect dashboard and recommendation tool', async () => {
@@ -494,18 +723,18 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     let catalog = null;
     let quickPickChoices = [];
     const vscode = {
-        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() { } }); } fire() { } dispose() { } },
         TreeItem: class { constructor(label) { this.label = label; } },
         TreeItemCollapsibleState: { None: 0 },
         ThemeIcon: class { constructor(id) { this.id = id; } },
         lm: {
-            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
+            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() { } }; },
             selectChatModels: async () => models
         },
-        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() {} }) },
-        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() { } }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() { } }; } },
         window: {
-            registerTreeDataProvider: () => ({ dispose() {} }),
+            registerTreeDataProvider: () => ({ dispose() { } }),
             showQuickPick: async choices => {
                 quickPickChoices = choices;
                 return choices.find(choice => choice.modelId === 'cloud');
@@ -519,11 +748,11 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
                         onDidReceiveMessage: handler => { created.receive = handler; },
                         postMessage: message => {
                             created.posted.push(message);
-                            if (['learningDashboard', 'learningDashboardError'].includes(message.type)) created.resolve?.(message);
+                            if (['learningDashboard', 'learningDashboardError'].includes(message.type) && !message.stale) created.resolve?.(message);
                         }
                     },
-                    reveal() {},
-                    onDidDispose() {}
+                    reveal() { },
+                    onDidDispose() { }
                 };
                 if (title === 'Aro Model Inventory') inventoryPanel = created;
                 else panel = created;
@@ -577,9 +806,11 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     const migratedPin = dashboard.dashboard.find(row => row.activity === 'operate'
         && row.domain === 'documentation-governance' && row.difficulty === 'standard');
     assert.equal(migratedPin.manualSelection.modelId, 'cloud');
-    const migratedPinResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
-        activity: 'operate', domain: 'documentation-governance', difficulty: 'standard'
-    } });
+    const migratedPinResult = await tools.get('aroGetModelRecommendations').invoke({
+        input: {
+            activity: 'operate', domain: 'documentation-governance', difficulty: 'standard'
+        }
+    });
     assert.equal(JSON.parse(migratedPinResult.content[0].value).selectionMode, 'manual');
     for (const vendor of ['copilot', 'copilotcli']) {
         inventoryPanel.posted.length = 0;
@@ -613,9 +844,11 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     const pinnedRow = dashboard.dashboard.find(row => row.activity === 'implement' && row.domain === 'coding' && row.difficulty === 'simple');
     assert.equal(pinnedRow.manualSelection.modelId, 'cloud');
     assert.equal(pinnedRow.selectionMode, 'manual');
-    const contextualManualResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
-        activity: 'implement', domain: 'coding', difficulty: 'simple'
-    } });
+    const contextualManualResult = await tools.get('aroGetModelRecommendations').invoke({
+        input: {
+            activity: 'implement', domain: 'coding', difficulty: 'simple'
+        }
+    });
     assert.equal(JSON.parse(contextualManualResult.content[0].value).selectionMode, 'manual');
     assert.equal(JSON.parse(contextualManualResult.content[0].value).recommendedModelId, 'cloud');
     response = nextDashboard();
@@ -657,16 +890,20 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     const advisorFallback = await tools.get('aroGetModelRecommendations').invoke({ input: { role: 'advisor', taskCategory: 'simple', excludedProviders: ['ollama'] } });
     assert.equal(JSON.parse(advisorFallback.content[0].value).recommendedModelId, 'cloud');
     assert.equal(state.has('agentRoster.modelLearning.scorecard.v1'), false);
-    const contextualResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
-        activity: 'advise', domain: 'coding', difficulty: 'standard'
-    } });
+    const contextualResult = await tools.get('aroGetModelRecommendations').invoke({
+        input: {
+            activity: 'advise', domain: 'coding', difficulty: 'standard'
+        }
+    });
     const contextualRecommendation = JSON.parse(contextualResult.content[0].value);
     assert.match(contextualRecommendation.callId, /^[0-9a-f]{32}$/);
-    const contextualOutcome = await tools.get('aroRecordModelOutcome').invoke({ input: {
-        activity: 'advise', domain: 'coding', difficulty: 'standard', agent: 'CodeDomainAdvisor',
-        callId: contextualRecommendation.callId, modelId: 'local', outcome: 'success', evidenceCode: 'acceptance_passed',
-        metrics: { durationMs: 900, costUsd: 0.01 }
-    } });
+    const contextualOutcome = await tools.get('aroRecordModelOutcome').invoke({
+        input: {
+            activity: 'advise', domain: 'coding', difficulty: 'standard', agent: 'CodeDomainAdvisor',
+            callId: contextualRecommendation.callId, modelId: 'local', outcome: 'success', evidenceCode: 'acceptance_passed',
+            metrics: { durationMs: 900, costUsd: 0.01 }
+        }
+    });
     assert.equal(JSON.parse(contextualOutcome.content[0].value).activity, 'advise');
     assert.equal(state.get('agentRoster.modelLearning.scorecard.v1').records.at(-1).metrics.durationMs, 900);
     assert.equal(state.get('agentRoster.modelLearning.scorecard.v1').records.at(-1).callId, contextualRecommendation.callId);
@@ -745,9 +982,11 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     assert.ok(compact.candidates.some(candidate => candidate.id === compact.recommendedModelId));
     assert.ok(Buffer.byteLength(compactResult.content[0].value) < 3500);
     await catalogChange({ type: 'setModelSelected', id: 'cli', vendor: 'copilotcli', selected: true });
-    const fallbackResult = await tools.get('aroGetModelRecommendations').invoke({ input: {
-        role: 'coding', taskCategory: 'simple', excludedProviders: ['copilot']
-    } });
+    const fallbackResult = await tools.get('aroGetModelRecommendations').invoke({
+        input: {
+            role: 'coding', taskCategory: 'simple', excludedProviders: ['copilot']
+        }
+    });
     const fallback = JSON.parse(fallbackResult.content[0].value);
     assert.equal(fallback.modelScope, 'cloud');
     assert.equal(fallback.recommendedModelId, 'cli');
@@ -755,9 +994,11 @@ test('inventory changes persist and affect dashboard and recommendation tool', a
     response = nextDashboard();
     panel.receive({ type: 'setModelScope', scope: 'local' });
     await response;
-    const localExhausted = await tools.get('aroGetModelRecommendations').invoke({ input: {
-        role: 'coding', taskCategory: 'simple', excludedModels: [{ id: 'local', vendor: 'ollama' }]
-    } });
+    const localExhausted = await tools.get('aroGetModelRecommendations').invoke({
+        input: {
+            role: 'coding', taskCategory: 'simple', excludedModels: [{ id: 'local', vendor: 'ollama' }]
+        }
+    });
     const exhausted = JSON.parse(localExhausted.content[0].value);
     assert.equal(exhausted.modelScope, 'local');
     assert.equal(exhausted.recommendedModelId, null);
@@ -796,23 +1037,23 @@ async function loadWorkspacePreferenceHarness({ workspaceFolders, workspaceValue
         }
     };
     const vscode = {
-        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() { } }); } fire() { } dispose() { } },
         TreeItem: class { constructor(label) { this.label = label; } },
         TreeItemCollapsibleState: { None: 0 },
         ThemeIcon: class { constructor(id) { this.id = id; } },
         ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
         lm: {
-            registerTool: () => ({ dispose() {} }),
+            registerTool: () => ({ dispose() { } }),
             selectChatModels: async () => models
         },
         workspace: {
             workspaceFolders,
             getConfiguration: section => section === 'agentRoster.modelRecommendation' ? configuration : { get: (key, fallback) => fallback, inspect: () => undefined },
-            onDidChangeConfiguration: () => ({ dispose() {} })
+            onDidChangeConfiguration: () => ({ dispose() { } })
         },
-        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() { } }; } },
         window: {
-            registerTreeDataProvider: () => ({ dispose() {} }),
+            registerTreeDataProvider: () => ({ dispose() { } }),
             showQuickPick: async () => undefined,
             showWarningMessage: message => { warnings.push(message); return Promise.resolve(undefined); },
             showErrorMessage: message => { errors.push(message); },
@@ -822,9 +1063,9 @@ async function loadWorkspacePreferenceHarness({ workspaceFolders, workspaceValue
                         cspSource: 'test',
                         asWebviewUri: uri => uri,
                         onDidReceiveMessage: handler => { panel.receive = handler; },
-                        postMessage: message => { if (['learningDashboard', 'learningDashboardError'].includes(message.type)) panel.resolve(message); }
+                        postMessage: message => { if (['learningDashboard', 'learningDashboardError'].includes(message.type) && !message.stale) panel.resolve(message); }
                     },
-                    onDidDispose() {}
+                    onDidDispose() { }
                 };
                 return panel;
             }
@@ -988,14 +1229,18 @@ test('learning webview sends scope, priority, and recommendation changes', async
     assert.equal(elements.get('activity-tabs').children[0].textContent, 'All');
     assert.equal(elements.get('domain-tabs').children.length, 6);
     assert.equal(elements.get('domain-tabs').children[0].textContent, 'All');
-    receive({ data: { type: 'learningDashboard', models: [
-        { id: 'm', name: 'Model', vendor: 'ollama', kind: 'local', selected: true, localTier: 'unrated', pricing: {} },
-        { id: 'c', name: 'Cloud', vendor: 'copilot', kind: 'cloud', selected: true, pricing: { source: 'unpriced', budgetClass: 'unpriced' } },
-        { id: 'cli', name: 'CLI', vendor: 'copilotcli', kind: 'cloud', selected: true, pricing: { source: 'vscode', budgetClass: 'high' } }
-    ], excludedModels: [], providerPolicyLabel: 'All providers', providerTypes: { ollama: 'local', copilot: 'cloud', copilotcli: 'cloud' }, lockedProviders: ['copilot', 'copilotcli'], dashboard: [
-        { activity: 'implement', domain: 'coding', difficulty: 'simple', recommendedModelId: 'c', recommendedVendor: 'copilot', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', sampleCount: 4, pooledSampleCount: 2, selectionMode: 'pooled', candidates: [{ id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'pooled', evidenceSource: 'mixed', samples: 3, pooledSamples: 2, successes: 3, failures: 1, score: 2 / 3, averageDurationMs: 1250, averageCostUsd: 0.0123, pricing: { source: 'vscode', budgetClass: 'low' } }] },
-        { activity: 'advise', domain: 'infrastructure', difficulty: 'complex', recommendedModelId: 'm', recommendedVendor: 'ollama', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', manualSelection: { modelId: 'm', vendor: 'ollama' }, sampleCount: 0, pooledSampleCount: 0, selectionMode: 'manual', eligibleCount: 1, candidates: [{ id: 'm', name: 'Model', vendor: 'ollama', selectionMode: 'manual', pricing: { source: 'local', budgetClass: 'low' } }, { id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'learned', pricing: { source: 'vscode', budgetClass: 'low' } }] }
-    ], recordCount: 6, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true, pinnedAdvisorModel: { modelId: 'c', vendor: 'copilot' } } });
+    receive({
+        data: {
+            type: 'learningDashboard', models: [
+                { id: 'm', name: 'Model', vendor: 'ollama', kind: 'local', selected: true, localTier: 'unrated', pricing: {} },
+                { id: 'c', name: 'Cloud', vendor: 'copilot', kind: 'cloud', selected: true, pricing: { source: 'unpriced', budgetClass: 'unpriced' } },
+                { id: 'cli', name: 'CLI', vendor: 'copilotcli', kind: 'cloud', selected: true, pricing: { source: 'vscode', budgetClass: 'high' } }
+            ], excludedModels: [], providerPolicyLabel: 'All providers', providerTypes: { ollama: 'local', copilot: 'cloud', copilotcli: 'cloud' }, lockedProviders: ['copilot', 'copilotcli'], dashboard: [
+                { activity: 'implement', domain: 'coding', difficulty: 'simple', recommendedModelId: 'c', recommendedVendor: 'copilot', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', sampleCount: 4, pooledSampleCount: 2, selectionMode: 'pooled', candidates: [{ id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'pooled', evidenceSource: 'mixed', samples: 3, pooledSamples: 2, successes: 3, failures: 1, score: 2 / 3, averageDurationMs: 1250, averageCostUsd: 0.0123, pricing: { source: 'vscode', budgetClass: 'low' } }] },
+                { activity: 'advise', domain: 'infrastructure', difficulty: 'complex', recommendedModelId: 'm', recommendedVendor: 'ollama', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', manualSelection: { modelId: 'm', vendor: 'ollama' }, sampleCount: 0, pooledSampleCount: 0, selectionMode: 'manual', eligibleCount: 1, candidates: [{ id: 'm', name: 'Model', vendor: 'ollama', selectionMode: 'manual', pricing: { source: 'local', budgetClass: 'low' } }, { id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'learned', pricing: { source: 'vscode', budgetClass: 'low' } }] }
+            ], recordCount: 6, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true, pinnedAdvisorModel: { modelId: 'c', vendor: 'copilot' }
+        }
+    });
     assert.equal(elements.get('recommendations').children.length, 2);
     assert.equal(elements.get('recommendations').children[0].children.length, 6);
     assert.equal(elements.get('recommendations').children[0].children[0].textContent, 'Implement');
@@ -1024,7 +1269,7 @@ test('learning webview sends scope, priority, and recommendation changes', async
     assert.equal(advisorDefault.value, JSON.stringify(['copilot', 'c']));
     assert.equal(elements.get('pin-advisor-model'), undefined);
     assert.notEqual(elements.get('context-difficulty-heading').hidden, true);
-    elements.get('activity-tabs').children[0].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
+    elements.get('activity-tabs').children[0].listeners.keydown({ key: 'ArrowRight', preventDefault() { } });
     assert.equal(elements.get('recommendations').children.length, 1);
     assert.equal(elements.get('context-count').textContent, 'Showing 1 of 2 contexts');
     assert.equal(elements.get('recommendations').children[0].children[0].hidden, true);
@@ -1034,7 +1279,7 @@ test('learning webview sends scope, priority, and recommendation changes', async
     assert.equal(elements.get('recommendations').children.length, 1);
     assert.equal(elements.get('context-count').textContent, 'Showing 1 of 2 contexts');
     assert.equal(elements.get('activity-tabs').children.find(tab => tab.dataset.filterValue === 'implement').focused, true);
-    elements.get('domain-tabs').children[0].listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
+    elements.get('domain-tabs').children[0].listeners.keydown({ key: 'ArrowRight', preventDefault() { } });
     assert.equal(elements.get('recommendations').children.length, 1);
     assert.equal(elements.get('recommendations').children[0].children[1].hidden, true);
     assert.equal(elements.get('context-domain-heading').hidden, true);
@@ -1077,6 +1322,36 @@ test('learning webview sends scope, priority, and recommendation changes', async
     assert.equal(scopeControls[0].checked, true);
     assert.equal(scopeControls[1].disabled, true);
     assert.equal(scopeControls[2].disabled, true);
+    receive({ data: { type: 'learningDashboard', stale: true, models: [], excludedModels: [], providerPolicyLabel: 'All providers', providerTypes: {}, lockedProviders: [], dashboard: [], recordCount: 0, scope: 'cloud', priority: 'cloud-first', hasSelectedLocalModel: false, pinnedAdvisorModel: null } });
+    assert.equal(elements.get('learning-message').textContent, 'Showing last loaded models while providers refresh...');
+    assert.equal(elements.get('learning-status').className, 'model-load-status is-loading');
+    assert.equal(elements.get('learning-status').attributes['aria-busy'], 'true');
+    receive({ data: { type: 'learningDashboard', stale: false, models: [], excludedModels: [], providerPolicyLabel: 'All providers', providerTypes: {}, lockedProviders: [], dashboard: [], recordCount: 0, scope: 'cloud', priority: 'cloud-first', hasSelectedLocalModel: false, pinnedAdvisorModel: null } });
+    assert.equal(elements.get('learning-status').className, 'model-load-status is-ready');
+    // Persisted (stale) rows render but every change control stays locked until live discovery arrives.
+    const liveDashboard = {
+        models: [
+            { id: 'm', name: 'Model', vendor: 'ollama', kind: 'local', selected: true, localTier: 'unrated', pricing: {} },
+            { id: 'c', name: 'Cloud', vendor: 'copilot', kind: 'cloud', selected: true, pricing: { source: 'unpriced', budgetClass: 'unpriced' } }
+        ], excludedModels: [], providerPolicyLabel: 'All providers', providerTypes: { ollama: 'local', copilot: 'cloud' }, lockedProviders: ['copilot'],
+        dashboard: [
+            { activity: 'implement', domain: 'coding', difficulty: 'simple', recommendedModelId: 'c', recommendedVendor: 'copilot', learnedRecommendedModelId: 'c', learnedRecommendedVendor: 'copilot', sampleCount: 4, pooledSampleCount: 2, selectionMode: 'pooled', candidates: [{ id: 'c', name: 'Cloud', vendor: 'copilot', selectionMode: 'pooled', evidenceSource: 'mixed', samples: 3, pooledSamples: 2, successes: 3, failures: 1, score: 2 / 3, averageDurationMs: 1250, averageCostUsd: 0.0123, pricing: { source: 'vscode', budgetClass: 'low' } }] }
+        ], recordCount: 6, scope: 'both', priority: 'cloud-first', hasSelectedLocalModel: true, pinnedAdvisorModel: null
+    };
+    const rowChoice = () => elements.get('recommendations').children[0].children[3].children[0];
+    receive({ data: { type: 'learningDashboard', stale: true, ...liveDashboard } });
+    assert.equal(rowChoice().disabled, true);
+    assert.equal(elements.get('advisor-default-model').disabled, true);
+    assert.equal(scopeControls[0].disabled, true);
+    receive({ data: { type: 'learningDashboardError', error: 'offline' } });
+    assert.equal(elements.get('learning-status').className, 'model-load-status is-error');
+    assert.equal(rowChoice().disabled, true);
+    assert.equal(elements.get('advisor-default-model').disabled, true);
+    assert.equal(scopeControls[0].disabled, true);
+    receive({ data: { type: 'learningDashboard', stale: false, ...liveDashboard } });
+    assert.equal(rowChoice().disabled, false);
+    assert.equal(elements.get('advisor-default-model').disabled, false);
+    assert.equal(scopeControls[0].disabled, false);
 });
 
 test('advisor default pin is validated, cleared, and yields to manual overrides', async () => {
@@ -1099,18 +1374,18 @@ test('advisor default pin is validated, cleared, and yields to manual overrides'
     ];
     let panel;
     const vscode = {
-        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() { } }); } fire() { } dispose() { } },
         TreeItem: class { constructor(label) { this.label = label; } },
         TreeItemCollapsibleState: { None: 0 },
         ThemeIcon: class { constructor(id) { this.id = id; } },
         lm: {
-            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
+            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() { } }; },
             selectChatModels: async () => models
         },
-        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() {} }) },
-        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; } },
+        workspace: { getConfiguration: () => ({ get: () => [], inspect: () => undefined }), onDidChangeConfiguration: () => ({ dispose() { } }) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() { } }; } },
         window: {
-            registerTreeDataProvider: () => ({ dispose() {} }),
+            registerTreeDataProvider: () => ({ dispose() { } }),
             showQuickPick: async () => undefined,
             createWebviewPanel: () => {
                 panel = {
@@ -1118,9 +1393,9 @@ test('advisor default pin is validated, cleared, and yields to manual overrides'
                         cspSource: 'test',
                         asWebviewUri: uri => uri,
                         onDidReceiveMessage: handler => { panel.receive = handler; },
-                        postMessage: message => { if (['learningDashboard', 'learningDashboardError'].includes(message.type)) panel.resolve(message); }
+                        postMessage: message => { if (['learningDashboard', 'learningDashboardError'].includes(message.type) && !message.stale) panel.resolve(message); }
                     },
-                    onDidDispose() {}
+                    onDidDispose() { }
                 };
                 return panel;
             }

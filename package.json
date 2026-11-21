@@ -11,7 +11,9 @@
         "onCommand:agentRoster.openModelInventory",
         "onView:agentRoster.modelLearning",
         "onLanguageModelTool:aroGetModelRecommendations",
-        "onLanguageModelTool:aroRecordModelOutcome"
+        "onLanguageModelTool:aroRecordModelOutcome",
+        "onLanguageModelTool:aroProposeSkill",
+        "onCommand:agentRoster.openSkillProposals"
     ],
     "license": "PolyForm-Noncommercial-1.0.0",
     "engines": {
@@ -112,6 +114,10 @@
             {
                 "command": "agentRoster.openModelInventory",
                 "title": "Agent Roster: Open Model Inventory"
+            },
+            {
+                "command": "agentRoster.openSkillProposals",
+                "title": "Agent Roster: Review Skill Proposals"
             }
         ],
         "languageModelTools": [
@@ -296,6 +302,49 @@
                         "modelId",
                         "outcome",
                         "evidenceCode"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            {
+                "name": "aroProposeSkill",
+                "displayName": "Propose an Aro skill",
+                "toolReferenceName": "aroProposeSkill",
+                "canBeReferencedInPrompt": true,
+                "userDescription": "Queue a draft skill for the user to review, edit, accept or dismiss.",
+                "modelDescription": "Queue a proposed reusable skill in the extension's local review inbox. Call it only when the user asked for or approved a skill proposal. It never creates a skill: the user must inspect, optionally edit, and explicitly accept the draft, which then writes .github/skills/<name>/SKILL.md in a workspace folder. Provide a lowercase hyphenated name, a one-line description that says when to use the skill, and the skill's Markdown instructions without frontmatter. Do not include secrets, personal paths, or private data. A result with stored false lists errors to fix; do not retry unchanged.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                            "description": "Unique skill name: lowercase letters, digits and single hyphens."
+                        },
+                        "description": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024,
+                            "description": "Single-line summary of what the skill does and when to use it."
+                        },
+                        "body": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "description": "Markdown instructions for SKILL.md, without YAML frontmatter."
+                        },
+                        "rationale": {
+                            "type": "string",
+                            "maxLength": 1000,
+                            "description": "Brief evidence for why this skill is worth adding; shown to the user, not written to the skill."
+                        }
+                    },
+                    "required": [
+                        "name",
+                        "description",
+                        "body"
                     ],
                     "additionalProperties": false
                 }

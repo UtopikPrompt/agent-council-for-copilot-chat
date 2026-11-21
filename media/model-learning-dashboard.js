@@ -15,7 +15,9 @@
     let pinnedAdvisorModel = null;
     let workspacePreference = normalizeWorkspacePreference(null);
     let preferenceScope = 'profile';
-    let learningLoading = false;
+    let controlsLocked = false;
+    let staleDataShown = false;
+    let recommendationButtons = [];
 
     const byId = id => document.getElementById(id);
 
@@ -73,6 +75,7 @@
     function renderDashboard() {
         const body = byId('recommendations');
         body.replaceChildren();
+        recommendationButtons = [];
         const matchingRows = dashboard.filter(item => (activeActivity === 'all' || item.activity === activeActivity)
             && (activeDomain === 'all' || item.domain === activeDomain));
         byId('context-activity-heading').hidden = activeActivity !== 'all';
@@ -100,6 +103,8 @@
             const manualChoice = document.createElement('button');
             manualChoice.type = 'button';
             manualChoice.className = 'manual-model-selection';
+            manualChoice.disabled = controlsLocked;
+            recommendationButtons.push(manualChoice);
             manualChoice.textContent = cell.manualSelection
                 ? cell.selectionMode === 'manual-unavailable'
                     ? `Unavailable: ${manualModel?.name || cell.manualSelection.modelId} (${manualModel?.vendor || cell.manualSelection.vendor})`
@@ -138,6 +143,8 @@
                 reset = document.createElement('button');
                 reset.type = 'button';
                 reset.className = 'use-learned-model';
+                reset.disabled = controlsLocked;
+                recommendationButtons.push(reset);
                 reset.textContent = 'X';
                 reset.title = 'Clear manual selection';
                 reset.setAttribute('aria-label', `Clear manual selection for ${activityLabels[cell.activity]}, ${domainLabels[cell.domain]}, ${difficultyLabel}`);
@@ -267,7 +274,7 @@
 
     function updateWorkspacePreferenceControls() {
         const state = workspacePreference;
-        const locked = learningLoading || !state.hasWorkspace;
+        const locked = controlsLocked || !state.hasWorkspace;
         byId('preference-scope-profile').disabled = locked;
         byId('preference-scope-workspace').disabled = locked;
         byId('workspace-provider').disabled = locked || !state.providers.length;
@@ -292,18 +299,20 @@
     }
 
     function setStatus(message, state) {
-        learningLoading = state === 'is-loading';
+        // Stale rows are display-only: every change control stays locked until a live discovery arrives.
+        controlsLocked = state === 'is-loading' || staleDataShown;
         const status = byId('learning-status');
         status.className = `model-load-status ${state}`;
         status.setAttribute('aria-busy', String(state === 'is-loading'));
         byId('learning-message').textContent = message;
         byId('refresh-learning').disabled = state === 'is-loading';
-        byId('advisor-default-model').disabled = state === 'is-loading';
-        byId('model-priority').disabled = state === 'is-loading' || scope !== 'both' || !hasSelectedLocalModel;
+        byId('advisor-default-model').disabled = controlsLocked;
+        byId('model-priority').disabled = controlsLocked || scope !== 'both' || !hasSelectedLocalModel;
         for (const control of document.querySelectorAll('#model-scope input')) {
-            control.disabled = state === 'is-loading'
+            control.disabled = controlsLocked
                 || (control.name === 'model-scope' && control.value !== 'cloud' && !hasSelectedLocalModel);
         }
+        for (const button of recommendationButtons) button.disabled = controlsLocked;
         updateWorkspacePreferenceControls();
     }
 
@@ -349,6 +358,7 @@
     window.addEventListener('message', event => {
         const message = event.data;
         if (message.type === 'learningDashboard') {
+            staleDataShown = message.stale === true;
             models = message.models;
             dashboard = message.dashboard;
             scope = message.scope;
@@ -362,9 +372,13 @@
             renderAdvisorDefault();
             renderWorkspacePreference();
             renderDashboard();
-            setStatus(scope === 'local' && !hasSelectedLocalModel
-                ? `Local only: no selected local model available. ${message.recordCount} outcomes stored.`
-                : `${message.recordCount} verified outcomes stored in this VS Code profile.`, 'is-ready');
+            if (message.stale) {
+                setStatus('Showing last loaded models while providers refresh...', 'is-loading');
+            } else {
+                setStatus(scope === 'local' && !hasSelectedLocalModel
+                    ? `Local only: no selected local model available. ${message.recordCount} outcomes stored.`
+                    : `${message.recordCount} verified outcomes stored in this VS Code profile.`, 'is-ready');
+            }
         } else if (message.type === 'learningDashboardError') {
             for (const control of document.querySelectorAll('#model-scope input')) control.checked = control.value === scope;
             byId('model-priority').value = priority;

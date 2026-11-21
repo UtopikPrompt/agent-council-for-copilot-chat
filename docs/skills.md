@@ -10,7 +10,7 @@ The roster includes 10 reusable workflows for recurring tasks. Skills describe p
 | [go-contract-validation](../skills/go-contract-validation/SKILL.md) | Backend | Go interfaces and provider adapters, especially cancellation, deadlines, idempotency, cleanup, and error propagation. |
 | [identity-failure-isolation](../skills/identity-failure-isolation/SKILL.md) | Security | CI authentication and authorization diagnosis using sanitized OIDC, GitHub App, tenant, and secret-reference evidence. |
 | [markdown-mermaid-delivery](../skills/markdown-mermaid-delivery/SKILL.md) | Documentation | Native Markdown and readable Mermaid diagrams with honest rendering status. |
-| [progressive-investigation](../skills/progressive-investigation/SKILL.md) | Investigation | Scoped debugging and review from a concrete anchor, falsifiable hypothesis, and cheapest discriminating check. |
+| [progressive-investigation](../skills/progressive-investigation/SKILL.md) | Investigation | Scoped debugging and review from a concrete anchor, falsifiable hypothesis, and cheapest discriminating check, with evidence checks before requesting logs. |
 | [release-contract-preflight](../skills/release-contract-preflight/SKILL.md) | Release | Artifact provenance, overlays, storage ownership, rollback, and stage-specific authorization. |
 | [secure-development-bootstrap](../skills/secure-development-bootstrap/SKILL.md) | Environment | Development setup across local hosts, SSH, containers, and Codespaces, including safe secret delivery. |
 | [specification-handoff](../skills/specification-handoff/SKILL.md) | Planning | Turning approved specifications into portable implementation handoffs with requirements, acceptance criteria, and evidence. |

@@ -8,6 +8,10 @@ Workers keep one skill-loading policy per consuming agent and load required skil
 
 Aro consults the relevant advisor before every specialist call, even when the right specialist seems obvious. If an advisor cannot recommend a valid worker, Aro corrects the candidate scope or asks for clarification; it does not skip advisor selection.
 
+Aro has no workspace read, search, or skill tools. Selected workers gather evidence, run diagnostics and load their own skill procedures.
+
+Before asking for logs, console output or session traces, Aro has a read-only worker check the supplied sources. Aro names the exact missing source only when a worker reports that it is missing or unreadable, and it does not read logs itself.
+
 ```mermaid
 sequenceDiagram
 	actor U as You
