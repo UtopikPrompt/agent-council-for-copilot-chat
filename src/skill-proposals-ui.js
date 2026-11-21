@@ -31,7 +31,7 @@ function messageOf(error) {
 }
 
 // `vscode` is injected so this module stays loadable without the extension host.
-function registerSkillProposals(vscode, context, { onChange = () => {} } = {}) {
+function registerSkillProposals(vscode, context, { onChange = () => { } } = {}) {
     const panels = new Set();
     const reservedNames = getReservedNames(context);
     const store = context.globalState;

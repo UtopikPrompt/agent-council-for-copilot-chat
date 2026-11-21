@@ -11,7 +11,7 @@ let queue = Promise.resolve();
 // Serializes read-modify-write cycles on the stored list so concurrent tool calls and UI actions cannot lose updates.
 function serialize(task) {
     const result = queue.then(task);
-    queue = result.catch(() => {});
+    queue = result.catch(() => { });
     return result;
 }
 

@@ -96,7 +96,7 @@ test('a failed write keeps the proposal and a successful write removes it', asyn
     const { proposal } = await proposals.submitProposal(store, draft());
     await assert.rejects(proposals.completeAcceptance(store, proposal.id, async () => { throw new Error('disk full'); }), /disk full/);
     assert.equal(proposals.listProposals(store).length, 1);
-    assert.equal((await proposals.completeAcceptance(store, proposal.id, async () => {})).ok, true);
+    assert.equal((await proposals.completeAcceptance(store, proposal.id, async () => { })).ok, true);
     assert.equal(proposals.listProposals(store).length, 0);
     assert.equal((await proposals.completeAcceptance(store, proposal.id, async () => assert.fail('must not write twice'))).ok, false);
 });
@@ -113,27 +113,27 @@ async function loadHarness({ state = new Map(), folders = [{ name: 'repo', uri: 
     let info = () => Promise.resolve(undefined);
     const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     const vscode = {
-        EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} dispose() {} },
+        EventEmitter: class { constructor() { this.event = () => ({ dispose() { } }); } fire() { } dispose() { } },
         TreeItem: class { constructor(label) { this.label = label; } },
         TreeItemCollapsibleState: { None: 0 },
         ThemeIcon: class { constructor(id) { this.id = id; } },
         lm: {
-            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() {} }; },
+            registerTool: (name, tool) => { tools.set(name, tool); return { dispose() { } }; },
             selectChatModels: async () => []
         },
         workspace: {
             workspaceFolders: folders,
             getConfiguration: () => ({ get: (key, fallback) => fallback, inspect: () => undefined }),
-            onDidChangeConfiguration: () => ({ dispose() {} }),
+            onDidChangeConfiguration: () => ({ dispose() { } }),
             fs: {
                 stat: async uri => { if (files.has(uri)) return {}; throw Object.assign(new Error('missing'), { code: 'FileNotFound' }); },
                 createDirectory: async uri => { files.add(uri); },
                 writeFile: async (uri, bytes) => { written.push({ uri, text: Buffer.from(bytes).toString('utf8') }); files.add(uri); }
             }
         },
-        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() {} }; }, executeCommand: async (name, ...args) => commands.get(name)?.(...args) },
+        commands: { registerCommand: (name, callback) => { commands.set(name, callback); return { dispose() { } }; }, executeCommand: async (name, ...args) => commands.get(name)?.(...args) },
         window: {
-            registerTreeDataProvider: () => ({ dispose() {} }),
+            registerTreeDataProvider: () => ({ dispose() { } }),
             showInformationMessage: (...args) => { messages.info.push(args); return info(...args); },
             showErrorMessage: message => { messages.error.push(message); },
             showWarningMessage: async (...args) => {
@@ -146,7 +146,7 @@ async function loadHarness({ state = new Map(), folders = [{ name: 'repo', uri: 
                 panels += 1;
                 return {
                     webview: { cspSource: 'test', asWebviewUri: uri => uri, onDidReceiveMessage: handler => { receive = handler; }, postMessage: message => { posted.push(message); } },
-                    onDidDispose() {}
+                    onDidDispose() { }
                 };
             }
         },

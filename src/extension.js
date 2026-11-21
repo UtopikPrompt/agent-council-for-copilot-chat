@@ -75,13 +75,13 @@ function getManualSelections(context) {
     return Array.isArray(stored) ? stored.map(selection => selection?.domain === 'github-workflow'
         ? { ...selection, domain: 'documentation-governance' }
         : selection).filter(selection => selection
-        && ACTIVITIES.includes(selection.activity)
-        && DOMAINS.includes(selection.domain)
-        && TASK_CATEGORIES.includes(selection.difficulty)
-        && typeof selection.modelId === 'string'
-        && selection.modelId.length > 0
-        && typeof selection.vendor === 'string'
-        && selection.vendor.length > 0) : [];
+            && ACTIVITIES.includes(selection.activity)
+            && DOMAINS.includes(selection.domain)
+            && TASK_CATEGORIES.includes(selection.difficulty)
+            && typeof selection.modelId === 'string'
+            && selection.modelId.length > 0
+            && typeof selection.vendor === 'string'
+            && selection.vendor.length > 0) : [];
 }
 
 function getManualSelection(selections, context) {
@@ -92,7 +92,7 @@ function getManualSelection(selections, context) {
 
 function enqueueInventoryUpdate(update) {
     const result = inventoryUpdates.then(update);
-    inventoryUpdates = result.catch(() => {});
+    inventoryUpdates = result.catch(() => { });
     return result;
 }
 
@@ -711,7 +711,7 @@ function openModelLearning(context) {
         if (message.type === 'ready' || message.type === 'refreshLearning') void refresh();
         if (message.type === 'openModelInventory') {
             void vscode.commands.executeCommand('agentRoster.openModelInventory');
-            return;LiveInventory
+            return; LiveInventory
         }
         if (message.type === 'setWorkspacePreference') {
             void enqueueInventoryUpdate(async () => {
@@ -737,7 +737,7 @@ function openModelLearning(context) {
             }).catch(error => {
                 panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
             });
-            return;LiveInventory
+            return; LiveInventory
         }
         if (['chooseManualModel', 'useLearnedModel'].includes(message.type)) {
             void enqueueInventoryUpdate(async () => {
@@ -793,7 +793,7 @@ function openModelLearning(context) {
             }).catch(error => {
                 panel.webview.postMessage({ type: 'learningDashboardError', error: error instanceof Error ? error.message : String(error) });
             });
-            return;LiveInventory
+            return; LiveInventory
         }
         if (['setModelScope', 'setModelPriority'].includes(message.type)) {
             void enqueueInventoryUpdate(async () => {
