@@ -28,7 +28,91 @@ test('resolves portable assets without permitting package traversal', () => {
 });
 
 test('validates the complete council and all extracted workflow consumers', async () => {
-    assert.deepEqual(await validate(), { agents: 49, skills: 10 });
+    assert.deepEqual(await validate(), { agents: 50, skills: 10 });
+});
+
+test('Azure DevOps agent is a read-first, non-delegating worker routed through InfraDevOpsAdvisor', async () => {
+    const name = 'InfraAzureDevOpsAgent';
+    const { metadata, body } = parseCustomization(await readFile(path.join(root, `agents/${name}.agent.md`), 'utf8'), name);
+    assert.equal(metadata.name, name);
+    assert.deepEqual(metadata.tools, ['read', 'search', 'ado-remote-mcp/*']);
+    assert.deepEqual(metadata.agents, []);
+    assert.equal(metadata.model, undefined, 'workers must not pin a model without measured evidence');
+    assert.equal(metadata['user-invocable'], false);
+    assert.match(body, /explicit user confirmation/);
+    assert.match(body, /Externally consequential/);
+    assert.match(body, /Destructive/);
+    assert.match(body, /Do not delegate/);
+    assert.match(body, /Treat the `ado-remote-mcp` tools as unknown until the runtime lists them/);
+
+    assert.match(body, /## Connection Check/);
+    assert.match(body, /Prefer `core_list_orgs` when the organization is missing/);
+    assert.match(body, /use `core_list_projects` when the organization is known but the project is missing/);
+    assert.match(body, /authentication or authorization error/);
+    assert.match(body, /connection error/);
+    assert.match(body, /empty or no data/);
+    assert.match(body, /does not prove that a local process is running/);
+    assert.match(body, /## Organization and Project Discovery/);
+    assert.match(body, /Probe only when a required identifier is missing or cannot be verified/);
+    assert.match(body, /If discovery returns no match or several plausible targets, return NEEDS_INPUT/);
+    assert.match(body, /## Endpoint Organization Context/);
+    assert.match(body, /so it may provide a default organization\. Do not ask the user to repeat it/);
+    assert.match(body, /do not read MCP configuration files to discover it/);
+    assert.match(body, /On read-only calls, omit the organization argument when the tool schema makes it optional so the endpoint can supply its default\./);
+    assert.match(body, /Request an explicit organization only after the tool indicates it is required and no configured default can be used/);
+    assert.match(body, /Never infer or fabricate one/);
+    assert.match(body, /Do not infer that the configured organization is inaccessible/);
+    assert.doesNotMatch(body, /When the organization is missing, call `core_list_orgs`/);
+    assert.match(body, /only an unscoped endpoint \(`https:\/\/mcp\.dev\.azure\.com`, with no organization in the URL\) can pass a different organization per call/);
+    assert.match(body, /Results remain constrained by the authenticated user's Azure DevOps access/);
+    assert.match(body, /An organization-specific URL cannot reach other organizations/);
+    assert.match(body, /regardless of tool name or family, and whether the call uses a generic dispatcher `action` parameter/);
+    for (const family of ['work items', 'pipeline runs', 'wiki pages', 'test plans', 'Enterprise Live Migration', 'future tool family']) {
+        assert.match(body, new RegExp(family));
+    }
+    assert.match(body, /Read-only calls need no confirmation/);
+    assert.match(body, /behavioral prompt rules, not enforcement/);
+    assert.match(body, /`X-MCP-Readonly: true`/);
+
+    const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+    assert.ok(manifest.contributes.chatAgents.some(entry => entry.path === `./agents/${name}.agent.md`));
+
+    const aro = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    assert.ok(aro.metadata.agents.includes(name));
+    assert.match(aro.body, /\| Azure DevOps work items, Azure Repos or pull requests, and Azure DevOps wiki through the Azure DevOps MCP \| InfraAzureDevOpsAgent \| InfraDevOpsAdvisor \|/);
+
+    const advisor = await readFile(path.join(root, 'agents/InfraDevOpsAdvisor.agent.md'), 'utf8');
+    assert.match(advisor, /Azure DevOps work items.*-> `InfraAzureDevOpsAgent`/);
+
+    const docs = await readFile(path.join(root, 'docs/agents.md'), 'utf8');
+    assert.match(docs, /\[InfraAzureDevOpsAgent\]\(\.\.\/agents\/InfraAzureDevOpsAgent\.agent\.md\)/);
+    const readme = await readFile(path.join(root, 'README.md'), 'utf8');
+    assert.match(readme, /\[InfraAzureDevOpsAgent\]\(agents\/InfraAzureDevOpsAgent\.agent\.md\)/);
+});
+
+test('GovWebResearchAgent fetches supplied URLs with web/fetch independent of SearXNG', async () => {
+    const name = 'GovWebResearchAgent';
+    const { metadata, body } = parseCustomization(await readFile(path.join(root, `agents/${name}.agent.md`), 'utf8'), name);
+    const text = body.replace(/\s+/g, ' ');
+    assert.deepEqual(metadata.tools, ['read', 'search', 'web/fetch', 'io.github.ihor-sokoliuk/mcp-searxng/*']);
+    assert.ok(!metadata.tools.includes('azure-mcp/search'));
+    assert.deepEqual(metadata.agents, []);
+    const procedure = text.split('## Research Procedure ')[1]?.split(/ ## /)[0];
+    assert.ok(procedure, 'Missing research procedure');
+    assert.match(procedure, /Fetch every directly supplied public URL with the declared `web\/fetch` tool\. This does not depend on SearXNG/);
+    assert.match(procedure, /use `web_url_read` only when that SearXNG tool is exposed/);
+    assert.match(procedure, /only when its tool is actually exposed/);
+    assert.match(procedure, /mark search-dependent work BLOCKED/);
+    assert.match(procedure, /Never use `azure-mcp\/search` as public web search/);
+    assert.doesNotMatch(text, /Read relevant result URLs with `web_url_read`/);
+    assert.match(text, /Cite only pages actually fetched/);
+});
+
+test('Aro routes direct public URL fetching through web/fetch with SearXNG optional', async () => {
+    const { body } = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro');
+    const cue = body.replace(/\s+/g, ' ');
+    assert.match(cue, /Direct public URL fetching uses its declared `web\/fetch` tool and does not depend on SearXNG/);
+    assert.match(cue, /SearXNG tools .*are optional for search when exposed/);
 });
 
 test('Aro learns model outcomes by contextual activity, domain, and difficulty', async () => {
@@ -288,6 +372,32 @@ test('Aro consults the required domain advisor before every specialist dispatch'
     assert.match(body, /consult\s+the relevant advisor for each distinct specialist selection/);
     assert.match(body, /\| Selection Cue \| Worker \| Required Advisor \|/);
     assert.doesNotMatch(body, /Optional Advisor/);
+    assert.match(body, /## Pre-Blocker Dispatch Gate\s+Before any user-facing BLOCKED or missing-tool report/);
+    assert.match(body, /confirm its worker is in your `agents` allowlist/);
+    assert.match(body, /Invoke that exact worker with the agent-dispatch tool\. Never substitute local research, diagnosis, or an unrelated tool\./);
+    assert.match(body, /Report BLOCKED only after that invocation fails or the worker reports its own missing capability/);
+    assert.match(body, /name the exact unavailable tool or capability, state that access remains unknown/);
+    assert.match(body, /enabling or exposing that tool in the active runtime is the remedy/);
+    assert.match(body, /Do not ask for an organization URL, project, or configuration as a workaround/);
+    assert.doesNotMatch(body, /(?:provide|enter|paste)\s+the organization URL\s*\(/i);
+    assert.match(body, /never infer no access from absent tools/);
+});
+
+test('Azure DevOps worker and Aro reject organization-URL workarounds for missing discovery tools', async () => {
+    const worker = parseCustomization(await readFile(path.join(root, 'agents/InfraAzureDevOpsAgent.agent.md'), 'utf8'), 'InfraAzureDevOpsAgent').body;
+    const aro = parseCustomization(await readFile(path.join(root, 'agents/Aro.agent.md'), 'utf8'), 'Aro').body;
+    for (const body of [worker, aro]) {
+        assert.doesNotMatch(body, /Provide the organization URL/i);
+        assert.doesNotMatch(body, /or enable the Azure DevOps tools so I can check access/i);
+        assert.match(body, /context cannot (?:make a missing tool callable|replace a missing tool)|an organization or URL cannot make a missing tool callable/);
+        assert.match(body, /Do not ask for an organization when the worker's endpoint may supply default context|Do not ask for an organization when the endpoint may supply default context/);
+    }
+    assert.match(worker, /Do not ask for an organization URL, project, or configuration as a workaround/);
+});
+
+test('Azure DevOps worker states the endpoint default organization rule', async () => {
+    const worker = parseCustomization(await readFile(path.join(root, 'agents/InfraAzureDevOpsAgent.agent.md'), 'utf8'), 'InfraAzureDevOpsAgent').body;
+    assert.ok(worker.includes('The endpoint may provide a default organization. The agent does not know its configured value and must not read MCP configuration to discover it. On read-only calls, omit the organization argument when the tool schema makes it optional so the endpoint can supply its default.'));
 });
 
 test('Aro has no workspace read or search tools; workers own evidence and skill procedures', async () => {
